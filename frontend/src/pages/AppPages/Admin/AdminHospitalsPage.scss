@@ -1,0 +1,305 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// AdminHospitalsPage.scss
+// ─────────────────────────────────────────────────────────────────────────────
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap");
+
+// ── Tokens ──────────────────────────────────────────────────────────────────
+$primary: #0ba3a3;
+$primary-dk: #077d7d;
+$primary-lt: #e6f7f7;
+$accent: #ff6b35;
+$accent-lt: #fff1ec;
+$navy: #0d2b45;
+$navy-lt: #e6eef5;
+$text: #1a2b3c;
+$text-muted: #6b7f8e;
+$border: #e2ebf0;
+$bg-main: #f7fafb;
+$bg-card: #ffffff;
+$white: #ffffff;
+$green: #1a9e5c;
+$green-lt: #e6f9f0;
+$danger: #e24b4a;
+$danger-lt: #fef2f2;
+$star: #f5a623;
+$star-lt: #fff8e6;
+$ff-head: "Playfair Display", serif;
+$ff-body: "DM Sans", sans-serif;
+$radius: 16px;
+$radius-sm: 10px;
+$shadow: 0 4px 24px rgba(13, 43, 69, 0.08);
+$shadow-hov: 0 12px 40px rgba(13, 43, 69, 0.14);
+
+@mixin card {
+  background: $bg-card;
+  border-radius: $radius;
+  box-shadow: $shadow;
+  border: 1px solid $border;
+}
+
+.admin-hospitals {
+  font-family: $ff-body;
+  max-width: 1400px;
+}
+
+.hosp-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+
+  &__right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+}
+
+.hosp-title {
+  font-family: $ff-head;
+  font-size: 2rem;
+  font-weight: 700;
+  color: $text;
+  margin: 0 0 4px;
+}
+
+.hosp-sub {
+  font-size: 0.875rem;
+  color: $text-muted;
+  margin: 0;
+}
+
+.hosp-total-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: $primary-dk;
+  background: $primary-lt;
+  padding: 6px 14px;
+  border-radius: 100px;
+  border: 1px solid rgba($primary, 0.25);
+}
+
+.btn-add-hosp {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0.6rem 1.35rem;
+  border: none;
+  border-radius: $radius-sm;
+  background: linear-gradient(135deg, $primary 0%, $primary-dk 100%);
+  color: $white;
+  font-family: $ff-body;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s;
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba($primary-dk, 0.3);
+  }
+}
+
+.hosp-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  @media (max-width: 900px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  @media (max-width: 576px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.hosp-card {
+  @include card;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  transition: transform 0.2s;
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: $shadow-hov;
+  }
+
+  &__cover-wrap {
+    width: 100%;
+    height: 140px;
+    border-radius: $radius-sm;
+    background: $bg-main;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+  }
+
+  &__cover {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  &__name {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: $text;
+    margin: 0 0 4px;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  &__address {
+    font-size: 0.85rem;
+    color: $text-muted;
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  &__badges {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 0.25rem;
+  }
+
+  &__info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    background: $bg-main;
+    padding: 0.75rem;
+    border-radius: $radius-sm;
+    margin-top: auto;
+  }
+
+  &__info-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    color: $text;
+    svg {
+      color: $primary;
+      font-size: 0.9rem;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    gap: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid $border;
+  }
+}
+
+.badge-active {
+  background: $green-lt;
+  color: $green;
+  border: 1px solid rgba($green, 0.25) !important;
+}
+.badge-inactive {
+  background: $bg-main;
+  color: $text-muted;
+  border: 1px solid $border !important;
+}
+.badge-type {
+  background: $navy-lt;
+  color: $navy;
+  border: 1px solid rgba($navy, 0.25) !important;
+}
+
+.hosp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 0;
+  border-radius: $radius-sm;
+  font-family: $ff-body;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition:
+    background 0.15s,
+    color 0.15s;
+
+  &--view {
+    color: $primary-dk;
+    background: transparent;
+    flex: 1;
+    justify-content: center;
+    &:hover {
+      background: $primary-lt;
+    }
+  }
+  &--edit {
+    color: $star;
+    background: transparent;
+    flex: 1;
+    justify-content: center;
+    &:hover {
+      background: $star-lt;
+    }
+  }
+  &--delete {
+    color: $danger;
+    background: transparent;
+    width: 32px;
+    justify-content: center;
+    &:hover {
+      background: $danger-lt;
+    }
+  }
+}
+
+.hosp-empty {
+  @include card;
+  padding: 3rem 2rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+
+  &__icon {
+    font-size: 3rem;
+    color: $border;
+  }
+  p {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: $text-muted;
+  }
+}
+
+.view-header {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid $border;
+}
+.view-cover {
+  width: 100px;
+  height: 100px;
+  border-radius: $radius-sm;
+  object-fit: cover;
+  border: 4px solid $white;
+  box-shadow: $shadow;
+}

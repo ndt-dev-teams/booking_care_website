@@ -160,9 +160,10 @@ const UserRow = ({ u, onView, onEditRole, onToggleBan }) => {
 // SUB-COMPONENT: UserRoleModal (Change Role)
 // ─────────────────────────────────────────────────────────────────────────────
 const UserRoleModal = ({ u, onSave, onClose, saving }) => {
+  const [role, setRole] = useState(u?.role || "user");
+  const currentRoleCfg = ROLE_CFG[u?.role] || ROLE_CFG.user;
+
   if (!u) return null;
-  const [role, setRole] = useState(u.role || "user");
-  const currentRoleCfg = ROLE_CFG[u.role] || ROLE_CFG.user;
 
   return (
     <>
@@ -463,7 +464,6 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
     fetchUsers(currentPage, search);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, search]);
 
   // 2. Handlers

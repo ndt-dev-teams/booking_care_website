@@ -155,6 +155,7 @@ $shadow-hov: 0 12px 40px rgba(13, 43, 69, 0.14);
     line-height: 1.3;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
@@ -165,6 +166,7 @@ $shadow-hov: 0 12px 40px rgba(13, 43, 69, 0.14);
     margin: 0;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }

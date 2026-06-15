@@ -9,7 +9,7 @@ export const BrandLogo = () => {
           <FaHeartPulse />
         </div>
         <span className="brand-text">
-          <span>TDT</span>
+          <span>TKT</span>
           <span>BookingCare</span>
         </span>
       </Link>

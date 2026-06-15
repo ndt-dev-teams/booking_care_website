@@ -5,8 +5,6 @@ export {default as SpecialtiesPage} from "./SpecialtiesPage";
 export {default as SpecialtyDetailPage} from "./SpecialtyDetailPage";
 export {default as HospitalsPage} from "./HospitalsPage";
 export {default as HospitalDetailPage} from "./HospitalDetailPage";
-export {default as ServicesPage} from "./ServicesPage";
-export {default as ServiceDetailPage} from "./ServiceDetailPage";
 export {default as SearchPage} from "./SearchPage";
 export {default as AboutPage} from "./AboutPage";
 export {default as ContactPage} from "./ContactPage";

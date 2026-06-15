@@ -1,8 +1,14 @@
 import { Link } from "react-router";
-import RoutePage from "../../components/Common/RoutePage";
-import StarRating from "../../components/Common/StarRating";
-import { toSlug } from "../../utils/helpers";
 import "./HospitalDetailPage.scss";
+
+const toSlug = (value) =>
+  value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
 
 const hospital = {
   name: "Bệnh viên Đa Khoa Hoàng Khoa",

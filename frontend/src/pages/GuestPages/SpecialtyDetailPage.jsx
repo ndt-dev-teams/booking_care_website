@@ -1,8 +1,16 @@
 import { Link, useParams } from "react-router";
 import { useState, useEffect } from "react";
-import { toSlug } from "../../utils/helpers";
 import { specialtyService } from "../../api/appService";
 import LoadingSpinner from "../../components/Common/LoadingSpinner";
+
+const toSlug = (value) =>
+  value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
 
 const SpecialtyDetailPage = () => {
   const { specialtySlug } = useParams();

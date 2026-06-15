@@ -1,8 +1,15 @@
 import { useState } from "react";
-import RoutePage from "../../components/Common/RoutePage";
 import { Link } from "react-router";
-import { toSlug } from "../../utils/helpers";
 import "./SearchPage.scss";
+
+const toSlug = (value) =>
+  value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
 
 const search = [
   {

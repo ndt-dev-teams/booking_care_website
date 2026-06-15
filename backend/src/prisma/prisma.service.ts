@@ -6,7 +6,8 @@ import { PrismaPg } from '@prisma/adapter-pg';
 @Injectable()
 export class PrismaService
   extends PrismaClient
-  implements OnModuleInit, OnModuleDestroy {
+  implements OnModuleInit, OnModuleDestroy
+{
   private readonly pool: Pool;
 
   constructor() {
@@ -20,8 +21,8 @@ export class PrismaService
     const adapter = new PrismaPg(pool);
 
     // 4. Truyền adapter vào constructor của PrismaClient gốc
-    super({ adapter });
-    // super({ adapter, log: ['query'] });
+    // super({ adapter });
+    super({ adapter, log: ['query'] });
 
     // 5. Lưu lại để dùng trong onModuleDestroy
     this.pool = pool;

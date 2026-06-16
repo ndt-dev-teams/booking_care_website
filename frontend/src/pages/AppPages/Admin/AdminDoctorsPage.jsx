@@ -3,8 +3,7 @@
 // Bootstrap Modal (React state controlled)
 // Align đầy đủ với CreateDoctorDto & UpdateDoctorDto (Admin)
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect } from "react";
-import ReactPaginate from "react-paginate";
+import { useState, useEffect, useCallback } from "react";
 import {
   FaUserMd,
   FaPlus,
@@ -18,8 +17,6 @@ import {
   FaEye,
   FaExclamationTriangle,
   FaCalendarAlt,
-  FaChevronLeft,
-  FaChevronRight,
   FaIdCard,
   FaMoneyBillWave,
   FaTimesCircle,
@@ -27,13 +24,17 @@ import {
   FaToggleOn,
   FaToggleOff,
 } from "react-icons/fa";
+import { toast } from "react-toastify";
 import "./AdminDoctorsPage.scss";
 import {
   doctorService,
   hospitalService,
   specialtyService,
 } from "../../../api/appService";
+import ImageUploadField from "../../../components/Common/ImageUploadField";
 import LoadingSpinner from "../../../components/Common/LoadingSpinner";
+import AppPagination from "../../../components/Common/AppPagination";
+import WorkingDaysSelector from "../../../components/Common/WorkingDaysSelector";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTS
@@ -47,22 +48,21 @@ const EMPTY_FORM = {
   password: "",
   firstName: "",
   lastName: "",
-  avatar: "",
   // --- Doctor profile ---
   slug: "",
   imgURL: "",
   licenseNumber: "",
   experience: "",
   consultationFee: "",
-  information: [], // string[]
-  treatment: [], // string[]
+  information: [],   // string[]
+  treatment: [],     // string[]
   // --- Admin-only flags ---
   isActive: true,
   isUserActive: true,
   isVerified: false,
   // --- Relations ---
-  specialtyIds: [], // string[]  (bắt buộc khi create)
-  hospitals: [], // DoctorHospitalLinkDto[] (bắt buộc khi create)
+  specialtyIds: [],  // string[]  (bắt buộc khi create)
+  hospitals: [],     // DoctorHospitalLinkDto[] (bắt buộc khi create)
 };
 
 // Hospital link mẫu rỗng
@@ -81,12 +81,10 @@ const buildPayload = (form, isEdit = false) => {
     firstName: form.firstName,
     lastName: form.lastName,
     imgURL: form.imgURL || undefined,
-    avatar: form.avatar || undefined,
     slug: form.slug || undefined,
     licenseNumber: form.licenseNumber || undefined,
     experience: form.experience !== "" ? Number(form.experience) : undefined,
-    consultationFee:
-      form.consultationFee !== "" ? Number(form.consultationFee) : undefined,
+    consultationFee: form.consultationFee !== "" ? Number(form.consultationFee) : undefined,
     information: form.information.filter(Boolean),
     treatment: form.treatment.filter(Boolean),
     // Relations
@@ -118,8 +116,7 @@ const buildPayload = (form, isEdit = false) => {
 // SUB-COMPONENT: DoctorRow
 // ─────────────────────────────────────────────────────────────────────────────
 const DoctorRow = ({ doc, onView, onEdit, onDelete }) => {
-  const fullName =
-    `${doc.user?.lastName ?? ""} ${doc.user?.firstName ?? ""}`.trim();
+  const fullName = `${doc.user?.lastName ?? ""} ${doc.user?.firstName ?? ""}`.trim();
   const specialty = doc.specialties?.[0]?.specialty?.name ?? "—";
   const hospital = doc.hospitals?.[0]?.hospital?.name ?? "—";
 
@@ -129,9 +126,7 @@ const DoctorRow = ({ doc, onView, onEdit, onDelete }) => {
         {doc.imgURL ? (
           <img src={doc.imgURL} alt={fullName} className="doc-row__avatar" />
         ) : (
-          <div className="doc-row__avatar-placeholder">
-            <FaUserMd />
-          </div>
+          <div className="doc-row__avatar-placeholder"><FaUserMd /></div>
         )}
       </div>
 
@@ -147,42 +142,26 @@ const DoctorRow = ({ doc, onView, onEdit, onDelete }) => {
           <FaHospital className="me-1 text-muted" /> {hospital}
         </p>
         <p className="doc-row__experience text-muted small">
-          <FaCalendarAlt className="me-1" /> {doc.experience ?? "—"} yrs exp
+          <FaCalendarAlt className="me-1" /> {doc.experience ?? "—"} năm kinh nghiệm
         </p>
       </div>
 
       <div className="doc-row__status">
         {doc.isActive ? (
-          <span className="doc-status-badge st-active">
-            <FaToggleOn className="me-1" /> Đang hoạt động
-          </span>
+          <span className="doc-status-badge st-active"><FaToggleOn className="me-1" /> Đang hoạt động</span>
         ) : (
-          <span className="doc-status-badge st-inactive">
-            <FaToggleOff className="me-1" /> Ngừng hoạt động
-          </span>
+          <span className="doc-status-badge st-inactive"><FaToggleOff className="me-1" /> Ngừng hoạt động</span>
         )}
       </div>
 
       <div className="doc-row__actions">
-        <button
-          className="doc-btn doc-btn--view"
-          onClick={() => onView(doc.id)}
-          title="View Detail"
-        >
+        <button className="doc-btn doc-btn--view" onClick={() => onView(doc.id)} title="Xem chi tiết">
           <FaEye />
         </button>
-        <button
-          className="doc-btn doc-btn--edit"
-          onClick={() => onEdit(doc.id)}
-          title="Edit Doctor"
-        >
+        <button className="doc-btn doc-btn--edit" onClick={() => onEdit(doc.id)} title="Sửa bác sĩ">
           <FaEdit />
         </button>
-        <button
-          className="doc-btn doc-btn--delete"
-          onClick={() => onDelete(doc)}
-          title="Delete Doctor"
-        >
+        <button className="doc-btn doc-btn--delete" onClick={() => onDelete(doc)} title="Xóa bác sĩ">
           <FaTrash />
         </button>
       </div>
@@ -212,24 +191,15 @@ const TagListEditor = ({ label, items, onAdd, onRemove, placeholder }) => {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder={placeholder}
-          onKeyDown={(e) =>
-            e.key === "Enter" && (e.preventDefault(), handleAdd())
-          }
+          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAdd())}
         />
-        <button
-          type="button"
-          className="btn btn-outline-primary btn-sm px-3"
-          onClick={handleAdd}
-        >
+        <button type="button" className="btn btn-outline-primary btn-sm px-3" onClick={handleAdd}>
           <FaPlus />
         </button>
       </div>
       <div className="d-flex flex-wrap gap-2">
         {items.map((item, i) => (
-          <span
-            key={i}
-            className="badge bg-light text-dark border d-flex align-items-center gap-1 py-2 px-2"
-          >
+          <span key={i} className="badge bg-light text-dark border d-flex align-items-center gap-1 py-2 px-2">
             {item}
             <FaTimesCircle
               className="text-danger ms-1"
@@ -246,49 +216,29 @@ const TagListEditor = ({ label, items, onAdd, onRemove, placeholder }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // SUB-COMPONENT: HospitalLinkEditor — quản lý mảng DoctorHospitalLinkDto
 // ─────────────────────────────────────────────────────────────────────────────
-const HospitalLinkEditor = ({
-  links,
-  hospitals,
-  onAdd,
-  onRemove,
-  onChangeLink,
-}) => {
+const HospitalLinkEditor = ({ links, hospitals, onAdd, onRemove, onChangeLink }) => {
   return (
     <div className="col-12">
       <div className="d-flex justify-content-between align-items-center mb-2">
-        <label className="form-label mb-0">
-          Bệnh viện / Phòng khám <span className="text-danger">*</span>
-        </label>
-        <button
-          type="button"
-          className="btn btn-outline-primary btn-sm"
-          onClick={onAdd}
-        >
+        <label className="form-label mb-0">Bệnh viện / Phòng khám <span className="text-danger">*</span></label>
+        <button type="button" className="btn btn-outline-primary btn-sm" onClick={onAdd}>
           <FaPlus className="me-1" /> Thêm
         </button>
       </div>
       {links.length === 0 && (
-        <p className="text-muted small">
-          Chưa có bệnh viện nào. Nhấn "Thêm" để thêm.
-        </p>
+        <p className="text-muted small">Chưa có bệnh viện nào. Nhấn "Thêm" để thêm.</p>
       )}
       {links.map((link, i) => (
         <div key={i} className="border rounded p-3 mb-2 bg-light">
           <div className="d-flex justify-content-between mb-2">
             <span className="fw-semibold small">Bệnh viện #{i + 1}</span>
-            <button
-              type="button"
-              className="btn btn-sm btn-outline-danger"
-              onClick={() => onRemove(i)}
-            >
+            <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => onRemove(i)}>
               <FaTimesCircle />
             </button>
           </div>
           <div className="row g-2">
             <div className="col-md-6">
-              <label className="form-label form-label-sm">
-                Chọn bệnh viện <span className="text-danger">*</span>
-              </label>
+              <label className="form-label form-label-sm">Chọn bệnh viện <span className="text-danger">*</span></label>
               <select
                 className="form-select form-select-sm"
                 value={link.hospitalId}
@@ -296,19 +246,15 @@ const HospitalLinkEditor = ({
               >
                 <option value="">-- Chọn --</option>
                 {hospitals.map((h) => (
-                  <option key={h.id} value={h.id}>
-                    {h.name}
-                  </option>
+                  <option key={h.id} value={h.id}>{h.name}</option>
                 ))}
               </select>
             </div>
             <div className="col-md-6">
               <label className="form-label form-label-sm">Ngày làm việc</label>
-              <input
-                className="form-control form-control-sm"
+              <WorkingDaysSelector
                 value={link.workingDays}
-                onChange={(e) => onChangeLink(i, "workingDays", e.target.value)}
-                placeholder="VD: MON,TUE,WED"
+                onChange={(value) => onChangeLink(i, "workingDays", value)}
               />
             </div>
             <div className="col-md-6">
@@ -340,15 +286,9 @@ const HospitalLinkEditor = ({
 // SUB-COMPONENT: DoctorFormModal  (Add / Edit)
 // ─────────────────────────────────────────────────────────────────────────────
 const DoctorFormModal = ({
-  mode,
-  form,
-  onChange,
-  onFormChange,
-  onSave,
-  onClose,
-  saving,
-  specialties,
-  hospitals,
+  mode, form, onChange, onFormChange,
+  onSave, onClose, saving,
+  specialties, hospitals,
 }) => {
   if (mode !== "add" && mode !== "edit") return null;
   const isEdit = mode === "edit";
@@ -357,19 +297,13 @@ const DoctorFormModal = ({
   const handleAddInfo = (val) =>
     onFormChange({ ...form, information: [...form.information, val] });
   const handleRemoveInfo = (i) =>
-    onFormChange({
-      ...form,
-      information: form.information.filter((_, idx) => idx !== i),
-    });
+    onFormChange({ ...form, information: form.information.filter((_, idx) => idx !== i) });
 
   // Handlers cho treatment[]
   const handleAddTreatment = (val) =>
     onFormChange({ ...form, treatment: [...form.treatment, val] });
   const handleRemoveTreatment = (i) =>
-    onFormChange({
-      ...form,
-      treatment: form.treatment.filter((_, idx) => idx !== i),
-    });
+    onFormChange({ ...form, treatment: form.treatment.filter((_, idx) => idx !== i) });
 
   // Handlers cho specialtyIds[]
   const handleToggleSpecialty = (id) => {
@@ -381,18 +315,12 @@ const DoctorFormModal = ({
 
   // Handlers cho hospitals[]
   const handleAddHospital = () =>
-    onFormChange({
-      ...form,
-      hospitals: [...form.hospitals, { ...EMPTY_HOSPITAL_LINK }],
-    });
+    onFormChange({ ...form, hospitals: [...form.hospitals, { ...EMPTY_HOSPITAL_LINK }] });
   const handleRemoveHospital = (i) =>
-    onFormChange({
-      ...form,
-      hospitals: form.hospitals.filter((_, idx) => idx !== i),
-    });
+    onFormChange({ ...form, hospitals: form.hospitals.filter((_, idx) => idx !== i) });
   const handleChangeHospitalLink = (i, field, val) => {
     const updated = form.hospitals.map((h, idx) =>
-      idx === i ? { ...h, [field]: val } : h,
+      idx === i ? { ...h, [field]: val } : h
     );
     onFormChange({ ...form, hospitals: updated });
   };
@@ -415,8 +343,9 @@ const DoctorFormModal = ({
             {/* Body */}
             <div className="modal-body">
               <div className="row g-3">
+
                 {/* ── SECTION: Tài khoản ───────────────────── */}
-                <div className="col-12">
+                <div className="col-12 doctor-form-section-title-wrap doctor-form-section-title-wrap--first">
                   <p className="form-section-title">
                     <FaEnvelope className="me-2 text-primary" />
                     Thông tin tài khoản
@@ -483,31 +412,8 @@ const DoctorFormModal = ({
                   </>
                 )}
 
-                <div className="col-md-6">
-                  <label className="form-label">Avatar URL (tài khoản)</label>
-                  <div className="d-flex gap-2 align-items-center">
-                    <input
-                      className="form-control"
-                      name="avatar"
-                      value={form.avatar}
-                      onChange={onChange}
-                      placeholder="https://..."
-                    />
-                    {form.avatar && (
-                      <img
-                        src={form.avatar}
-                        alt="preview"
-                        className="avatar-preview"
-                        onError={(e) => {
-                          e.target.style.display = "none";
-                        }}
-                      />
-                    )}
-                  </div>
-                </div>
-
                 {/* ── SECTION: Hồ sơ bác sĩ ───────────────── */}
-                <div className="col-12 mt-2">
+                <div className="col-12 doctor-form-section-title-wrap">
                   <p className="form-section-title">
                     <FaIdCard className="me-2 text-primary" />
                     Hồ sơ bác sĩ
@@ -515,28 +421,13 @@ const DoctorFormModal = ({
                 </div>
 
                 <div className="col-md-6">
-                  <label className="form-label">
-                    Ảnh đại diện bác sĩ (imgURL)
-                  </label>
-                  <div className="d-flex gap-2 align-items-center">
-                    <input
-                      className="form-control"
-                      name="imgURL"
-                      value={form.imgURL}
-                      onChange={onChange}
-                      placeholder="https://..."
-                    />
-                    {form.imgURL && (
-                      <img
-                        src={form.imgURL}
-                        alt="preview"
-                        className="avatar-preview"
-                        onError={(e) => {
-                          e.target.style.display = "none";
-                        }}
-                      />
-                    )}
-                  </div>
+                  <ImageUploadField
+                    label="Ảnh đại diện bác sĩ (imgURL)"
+                    value={form.imgURL}
+                    uploadType="doctors"
+                    onChange={(imgURL) => onFormChange({ ...form, imgURL })}
+                    disabled={saving}
+                  />
                 </div>
 
                 <div className="col-md-6">
@@ -615,7 +506,7 @@ const DoctorFormModal = ({
                 {/* ── SECTION: Admin flags ─────────────────── */}
                 {isEdit && (
                   <>
-                    <div className="col-12 mt-2">
+                    <div className="col-12 doctor-form-section-title-wrap">
                       <p className="form-section-title">
                         <FaToggleOn className="me-2 text-primary" />
                         Trạng thái (Admin)
@@ -629,17 +520,9 @@ const DoctorFormModal = ({
                           type="checkbox"
                           id="chk-isActive"
                           checked={form.isActive}
-                          onChange={(e) =>
-                            onFormChange({
-                              ...form,
-                              isActive: e.target.checked,
-                            })
-                          }
+                          onChange={(e) => onFormChange({ ...form, isActive: e.target.checked })}
                         />
-                        <label
-                          className="form-check-label"
-                          htmlFor="chk-isActive"
-                        >
+                        <label className="form-check-label" htmlFor="chk-isActive">
                           Hồ sơ đang hoạt động (isActive)
                         </label>
                       </div>
@@ -652,17 +535,9 @@ const DoctorFormModal = ({
                           type="checkbox"
                           id="chk-isUserActive"
                           checked={form.isUserActive}
-                          onChange={(e) =>
-                            onFormChange({
-                              ...form,
-                              isUserActive: e.target.checked,
-                            })
-                          }
+                          onChange={(e) => onFormChange({ ...form, isUserActive: e.target.checked })}
                         />
-                        <label
-                          className="form-check-label"
-                          htmlFor="chk-isUserActive"
-                        >
+                        <label className="form-check-label" htmlFor="chk-isUserActive">
                           Tài khoản kích hoạt (isUserActive)
                         </label>
                       </div>
@@ -675,17 +550,9 @@ const DoctorFormModal = ({
                           type="checkbox"
                           id="chk-isVerified"
                           checked={form.isVerified}
-                          onChange={(e) =>
-                            onFormChange({
-                              ...form,
-                              isVerified: e.target.checked,
-                            })
-                          }
+                          onChange={(e) => onFormChange({ ...form, isVerified: e.target.checked })}
                         />
-                        <label
-                          className="form-check-label"
-                          htmlFor="chk-isVerified"
-                        >
+                        <label className="form-check-label" htmlFor="chk-isVerified">
                           Đã xác thực (isVerified)
                         </label>
                       </div>
@@ -694,7 +561,7 @@ const DoctorFormModal = ({
                 )}
 
                 {/* ── SECTION: Chuyên khoa ─────────────────── */}
-                <div className="col-12 mt-2">
+                <div className="col-12 doctor-form-section-title-wrap">
                   <p className="form-section-title">
                     <FaStethoscope className="me-2 text-primary" />
                     Chuyên khoa <span className="text-danger">*</span>
@@ -714,15 +581,13 @@ const DoctorFormModal = ({
                       );
                     })}
                     {specialties.length === 0 && (
-                      <span className="text-muted small">
-                        Đang tải chuyên khoa...
-                      </span>
+                      <span className="text-muted small">Đang tải chuyên khoa...</span>
                     )}
                   </div>
                 </div>
 
                 {/* ── SECTION: Bệnh viện ───────────────────── */}
-                <div className="col-12 mt-2">
+                <div className="col-12 doctor-form-section-title-wrap">
                   <p className="form-section-title">
                     <FaHospital className="me-2 text-primary" />
                     Lịch làm việc tại bệnh viện
@@ -736,23 +601,16 @@ const DoctorFormModal = ({
                   onRemove={handleRemoveHospital}
                   onChangeLink={handleChangeHospitalLink}
                 />
+
               </div>
             </div>
 
             {/* Footer */}
             <div className="modal-footer">
-              <button
-                className="btn btn-light border"
-                onClick={onClose}
-                disabled={saving}
-              >
+              <button className="btn btn-light border" onClick={onClose} disabled={saving}>
                 Hủy
               </button>
-              <button
-                className="btn btn-save"
-                onClick={onSave}
-                disabled={saving}
-              >
+              <button className="btn btn-save" onClick={onSave} disabled={saving}>
                 {saving ? (
                   <span className="spinner-border spinner-border-sm me-1" />
                 ) : isEdit ? (
@@ -776,13 +634,8 @@ const DoctorFormModal = ({
 const DoctorViewModal = ({ doc, onEdit, onClose }) => {
   if (!doc) return null;
 
-  const fullName =
-    `${doc.user?.lastName ?? ""} ${doc.user?.firstName ?? ""}`.trim();
-  const specialtyNames =
-    doc.specialties
-      ?.map((s) => s.specialty?.name)
-      .filter(Boolean)
-      .join(", ") || "—";
+  const fullName = `${doc.user?.lastName ?? ""} ${doc.user?.firstName ?? ""}`.trim();
+  const specialtyNames = doc.specialties?.map((s) => s.specialty?.name).filter(Boolean).join(", ") || "—";
   const hospitalList = doc.hospitals ?? [];
 
   return (
@@ -800,11 +653,7 @@ const DoctorViewModal = ({ doc, onEdit, onClose }) => {
               {/* Avatar + tên */}
               <div className="view-header">
                 {doc.imgURL ? (
-                  <img
-                    src={doc.imgURL}
-                    alt={fullName}
-                    className="view-avatar"
-                  />
+                  <img src={doc.imgURL} alt={fullName} className="view-avatar" />
                 ) : (
                   <div className="view-avatar d-flex align-items-center justify-content-center bg-light text-primary">
                     <FaUserMd size={30} />
@@ -817,21 +666,14 @@ const DoctorViewModal = ({ doc, onEdit, onClose }) => {
                     {specialtyNames}
                   </p>
                   <div className="d-flex gap-2 flex-wrap mt-1">
-                    <span
-                      className={`badge ${doc.isActive ? "bg-success" : "bg-secondary"}`}
-                    >
+                    <span className={`badge ${doc.isActive ? "bg-success" : "bg-secondary"}`}>
                       {doc.isActive ? "Đang hoạt động" : "Ngừng hoạt động"}
                     </span>
-                    <span
-                      className={`badge ${doc.isVerified ? "bg-info text-dark" : "bg-warning text-dark"}`}
-                    >
+                    <span className={`badge ${doc.isVerified ? "bg-info text-dark" : "bg-warning text-dark"}`}>
                       {doc.isVerified ? "Đã xác thực" : "Chưa xác thực"}
                     </span>
-                    <span
-                      className={`badge ${doc.user?.isActive !== false ? "bg-success" : "bg-danger"}`}
-                    >
-                      TK:{" "}
-                      {doc.user?.isActive !== false ? "Kích hoạt" : "Bị khóa"}
+                    <span className={`badge ${doc.user?.isActive !== false ? "bg-success" : "bg-danger"}`}>
+                      TK: {doc.user?.isActive !== false ? "Kích hoạt" : "Bị khóa"}
                     </span>
                   </div>
                 </div>
@@ -840,47 +682,27 @@ const DoctorViewModal = ({ doc, onEdit, onClose }) => {
               {/* Info grid */}
               <div className="row g-2 mt-3">
                 {[
-                  {
-                    icon: FaPhone,
-                    label: "Điện thoại",
-                    val: doc.user?.phone ?? "—",
-                  },
-                  {
-                    icon: FaEnvelope,
-                    label: "Email",
-                    val: doc.user?.email ?? "—",
-                  },
-                  {
-                    icon: FaIdCard,
-                    label: "Số GPHN",
-                    val: doc.licenseNumber ?? "—",
-                  },
-                  {
-                    icon: FaCalendarAlt,
-                    label: "Kinh nghiệm",
-                    val: doc.experience != null ? `${doc.experience} năm` : "—",
-                  },
-                  {
-                    icon: FaStar,
-                    label: "Đánh giá",
-                    val: doc.rating ?? "Chưa có",
-                  },
-                  {
-                    icon: FaMoneyBillWave,
-                    label: "Phí tư vấn",
-                    val: `₫${Number(doc.consultationFee || 0).toLocaleString()}`,
-                  },
-                ].map(({ icon: Icon, label, val }) => (
-                  <div key={label} className="col-md-6">
-                    <div className="view-info-item">
-                      <Icon className="view-info-icon" />
-                      <div>
-                        <p className="view-info-label">{label}</p>
-                        <p className="view-info-val">{val}</p>
+                  { icon: FaPhone, label: "Slug", val: doc.slug ?? "—" },
+                  { icon: FaEnvelope, label: "Email", val: doc.user?.email ?? "—" },
+                  { icon: FaIdCard, label: "Số GPHN", val: doc.licenseNumber ?? "—" },
+                  { icon: FaCalendarAlt, label: "Kinh nghiệm", val: doc.experience != null ? `${doc.experience} năm` : "—" },
+                  { icon: FaStar, label: "Đánh giá", val: doc.rating ?? "Chưa có" },
+                  { icon: FaMoneyBillWave, label: "Phí tư vấn", val: `₫${Number(doc.consultationFee || 0).toLocaleString()}` },
+                ].map((item) => {
+                  const InfoIcon = item.icon;
+
+                  return (
+                    <div key={item.label} className="col-md-6">
+                      <div className="view-info-item">
+                        <InfoIcon className="view-info-icon" />
+                        <div>
+                          <p className="view-info-label">{item.label}</p>
+                          <p className="view-info-val">{item.val}</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Information */}
@@ -888,9 +710,7 @@ const DoctorViewModal = ({ doc, onEdit, onClose }) => {
                 <div className="view-bio mt-3">
                   <p className="view-bio__title">Giới thiệu</p>
                   <ul className="mb-0">
-                    {doc.information.map((item, i) => (
-                      <li key={i}>{item}</li>
-                    ))}
+                    {doc.information.map((item, i) => <li key={i}>{item}</li>)}
                   </ul>
                 </div>
               )}
@@ -900,9 +720,7 @@ const DoctorViewModal = ({ doc, onEdit, onClose }) => {
                 <div className="view-bio mt-2">
                   <p className="view-bio__title">Phương pháp điều trị</p>
                   <ul className="mb-0">
-                    {doc.treatment.map((item, i) => (
-                      <li key={i}>{item}</li>
-                    ))}
+                    {doc.treatment.map((item, i) => <li key={i}>{item}</li>)}
                   </ul>
                 </div>
               )}
@@ -916,9 +734,7 @@ const DoctorViewModal = ({ doc, onEdit, onClose }) => {
                   {hospitalList.map((h, i) => (
                     <div key={i} className="view-appt-row">
                       <div className="view-appt-info">
-                        <p className="view-appt-patient">
-                          {h.hospital?.name ?? "—"}
-                        </p>
+                        <p className="view-appt-patient">{h.hospital?.name ?? "—"}</p>
                         <p className="view-appt-type">
                           {h.workingDays || "—"} &nbsp;·&nbsp;
                           {h.startTime || "?"} – {h.endTime || "?"}
@@ -931,9 +747,7 @@ const DoctorViewModal = ({ doc, onEdit, onClose }) => {
             </div>
 
             <div className="modal-footer">
-              <button className="btn btn-light border" onClick={onClose}>
-                Đóng
-              </button>
+              <button className="btn btn-light border" onClick={onClose}>Đóng</button>
               <button className="btn btn-save" onClick={onEdit}>
                 <FaEdit className="me-1" /> Chỉnh sửa
               </button>
@@ -950,8 +764,7 @@ const DoctorViewModal = ({ doc, onEdit, onClose }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 const DeleteConfirmModal = ({ doc, onConfirm, onClose, deleting }) => {
   if (!doc) return null;
-  const fullName =
-    `${doc.user?.lastName ?? ""} ${doc.user?.firstName ?? ""}`.trim();
+  const fullName = `${doc.user?.lastName ?? ""} ${doc.user?.firstName ?? ""}`.trim();
   return (
     <>
       <div className="modal-backdrop fade show" onClick={onClose} />
@@ -972,23 +785,14 @@ const DeleteConfirmModal = ({ doc, onConfirm, onClose, deleting }) => {
               </p>
             </div>
             <div className="modal-footer justify-content-center gap-2 border-0 pt-0 pb-4">
-              <button
-                className="btn btn-light border px-4"
-                onClick={onClose}
-                disabled={deleting}
-              >
+              <button className="btn btn-light border px-4" onClick={onClose} disabled={deleting}>
                 Hủy
               </button>
-              <button
-                className="btn btn-danger px-4"
-                onClick={onConfirm}
-                disabled={deleting}
-              >
-                {deleting ? (
-                  <span className="spinner-border spinner-border-sm me-1" />
-                ) : (
-                  <FaTrash className="me-1" />
-                )}
+              <button className="btn btn-danger px-4" onClick={onConfirm} disabled={deleting}>
+                {deleting
+                  ? <span className="spinner-border spinner-border-sm me-1" />
+                  : <FaTrash className="me-1" />
+                }
                 Xóa
               </button>
             </div>
@@ -1015,6 +819,12 @@ export default function AdminDoctorsPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState(null);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [filterSpecialtyId, setFilterSpecialtyId] = useState("");
+  const [filterHospitalId, setFilterHospitalId] = useState("");
+  const [filterActive, setFilterActive] = useState("");
+  const [filterVerified, setFilterVerified] = useState("");
 
   // ── Fetch options (chạy 1 lần) ───────────────────────────────────────────
   useEffect(() => {
@@ -1030,11 +840,21 @@ export default function AdminDoctorsPage() {
   }, []);
 
   // ── Fetch danh sách bác sĩ ───────────────────────────────────────────────
-  const fetchDoctors = (page) => {
+  const fetchDoctors = useCallback((page) => {
     setIsLoading(true);
     setError(null);
+    const params = {
+      page: page + 1,
+      limit: PAGE_LIMIT,
+      ...(search.trim() && { search: search.trim() }),
+      ...(filterSpecialtyId && { specialtyId: filterSpecialtyId }),
+      ...(filterHospitalId && { hospitalId: filterHospitalId }),
+      ...(filterActive !== "" && { isActive: filterActive }),
+      ...(filterVerified !== "" && { isVerified: filterVerified }),
+    };
+
     doctorService
-      .adminGetDoctors({ page: page + 1, limit: PAGE_LIMIT })
+      .adminGetDoctors(params)
       .then((res) => {
         setDoctors(res.data?.data ?? []);
         setMeta(res.data?.meta ?? {});
@@ -1044,41 +864,41 @@ export default function AdminDoctorsPage() {
         setError("Không thể tải danh sách bác sĩ.");
       })
       .finally(() => setIsLoading(false));
-  };
+  }, [filterActive, filterHospitalId, filterSpecialtyId, filterVerified, search]);
 
   useEffect(() => {
     fetchDoctors(currentPage);
-  }, [currentPage]);
+  }, [currentPage, fetchDoctors]);
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    setCurrentPage(0);
+    setSearch(searchInput);
+  };
 
   // ── Helpers map doc detail → form state ──────────────────────────────────
   const docToForm = (doc) => ({
     email: doc.user?.email ?? "",
-    password: "", // không map lại password
+    password: "",                              // không map lại password
     firstName: doc.user?.firstName ?? "",
     lastName: doc.user?.lastName ?? "",
-    avatar: doc.user?.avatar ?? "",
     slug: doc.slug ?? "",
     imgURL: doc.imgURL ?? "",
     licenseNumber: doc.licenseNumber ?? "",
     experience: doc.experience != null ? String(doc.experience) : "",
-    consultationFee:
-      doc.consultationFee != null ? String(doc.consultationFee) : "",
+    consultationFee: doc.consultationFee != null ? String(doc.consultationFee) : "",
     information: doc.information ?? [],
     treatment: doc.treatment ?? [],
     isActive: doc.isActive ?? true,
     isUserActive: doc.user?.isActive ?? true,
     isVerified: doc.isVerified ?? false,
-    specialtyIds:
-      doc.specialties
-        ?.map((s) => s.specialty?.id ?? s.specialtyId)
-        .filter(Boolean) ?? [],
-    hospitals:
-      doc.hospitals?.map((h) => ({
-        hospitalId: h.hospital?.id ?? h.hospitalId ?? "",
-        workingDays: h.workingDays ?? "",
-        startTime: h.startTime ?? "",
-        endTime: h.endTime ?? "",
-      })) ?? [],
+    specialtyIds: doc.specialties?.map((s) => s.specialty?.id ?? s.specialtyId).filter(Boolean) ?? [],
+    hospitals: doc.hospitals?.map((h) => ({
+      hospitalId: h.hospital?.id ?? h.hospitalId ?? "",
+      workingDays: h.workingDays ?? "",
+      startTime: h.startTime ?? "",
+      endTime: h.endTime ?? "",
+    })) ?? [],
   });
 
   // ── Modal openers ─────────────────────────────────────────────────────────
@@ -1097,7 +917,7 @@ export default function AdminDoctorsPage() {
       setModal("edit");
     } catch (err) {
       console.error("Lỗi lấy chi tiết bác sĩ:", err);
-      alert("Không thể tải thông tin bác sĩ.");
+      toast.error("Không thể tải thông tin bác sĩ.");
     }
   };
 
@@ -1108,7 +928,7 @@ export default function AdminDoctorsPage() {
       setModal("view");
     } catch (err) {
       console.error("Lỗi lấy chi tiết bác sĩ:", err);
-      alert("Không thể tải thông tin bác sĩ.");
+      toast.error("Không thể tải thông tin bác sĩ.");
     }
   };
 
@@ -1146,7 +966,7 @@ export default function AdminDoctorsPage() {
       fetchDoctors(currentPage);
     } catch (err) {
       console.error("Lỗi lưu bác sĩ:", err);
-      alert(err?.response?.data?.message ?? "Có lỗi xảy ra, vui lòng thử lại.");
+      toast.error(err?.response?.data?.message ?? "Có lỗi xảy ra, vui lòng thử lại.");
     } finally {
       setSaving(false);
     }
@@ -1163,7 +983,7 @@ export default function AdminDoctorsPage() {
       else fetchDoctors(currentPage);
     } catch (err) {
       console.error("Lỗi xóa bác sĩ:", err);
-      alert(err?.response?.data?.message ?? "Không thể xóa, vui lòng thử lại.");
+      toast.error(err?.response?.data?.message ?? "Không thể xóa, vui lòng thử lại.");
     } finally {
       setDeleting(false);
     }
@@ -1197,10 +1017,100 @@ export default function AdminDoctorsPage() {
 
       {/* Error */}
       {error && (
-        <div className="alert alert-danger" role="alert">
-          {error}
-        </div>
+        <div className="alert alert-danger" role="alert">{error}</div>
       )}
+
+      <div className="card shadow-sm border-0 mb-4 p-3 bg-white">
+        <div className="row g-2 align-items-center">
+          <div className="col-12 col-xl-3">
+            <form onSubmit={handleSearchSubmit} className="input-group">
+              <input
+                className="form-control"
+                placeholder="Tìm tên hoặc email bác sĩ..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+              />
+              <button className="btn btn-primary" type="submit">Tìm</button>
+            </form>
+          </div>
+          <div className="col-12 col-md-6 col-xl-2">
+            <select
+              className="form-select"
+              value={filterSpecialtyId}
+              onChange={(e) => {
+                setFilterSpecialtyId(e.target.value);
+                setCurrentPage(0);
+              }}
+            >
+              <option value="">Tất cả chuyên khoa</option>
+              {specialties.map((spec) => (
+                <option key={spec.id} value={spec.id}>{spec.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="col-12 col-md-6 col-xl-2">
+            <select
+              className="form-select"
+              value={filterHospitalId}
+              onChange={(e) => {
+                setFilterHospitalId(e.target.value);
+                setCurrentPage(0);
+              }}
+            >
+              <option value="">Tất cả cơ sở</option>
+              {hospitals.map((hosp) => (
+                <option key={hosp.id} value={hosp.id}>{hosp.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="col-12 col-md-4 col-xl-2">
+            <select
+              className="form-select"
+              value={filterActive}
+              onChange={(e) => {
+                setFilterActive(e.target.value);
+                setCurrentPage(0);
+              }}
+            >
+              <option value="">Tất cả hoạt động</option>
+              <option value="true">Đang hoạt động</option>
+              <option value="false">Ngừng hoạt động</option>
+            </select>
+          </div>
+          <div className="col-12 col-md-4 col-xl-2">
+            <select
+              className="form-select"
+              value={filterVerified}
+              onChange={(e) => {
+                setFilterVerified(e.target.value);
+                setCurrentPage(0);
+              }}
+            >
+              <option value="">Tất cả xác thực</option>
+              <option value="true">Đã xác thực</option>
+              <option value="false">Chưa xác thực</option>
+            </select>
+          </div>
+          {(search || filterSpecialtyId || filterHospitalId || filterActive || filterVerified) && (
+            <div className="col-12 col-md-4 col-xl-1">
+              <button
+                className="btn btn-light border w-100"
+                onClick={() => {
+                  setSearch("");
+                  setSearchInput("");
+                  setFilterSpecialtyId("");
+                  setFilterHospitalId("");
+                  setFilterActive("");
+                  setFilterVerified("");
+                  setCurrentPage(0);
+                }}
+              >
+                Xóa
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Grid */}
       {isLoading ? (
@@ -1224,65 +1134,13 @@ export default function AdminDoctorsPage() {
         </div>
       )}
 
-      {/* Pagination */}
-      {!isLoading && (meta.totalPages ?? 1) > 1 && (
-        <div className="doctors-pagination-wrap">
-          <nav aria-label="Page navigation">
-            <ul className="pagination justify-content-center mb-3">
-              <li
-                className={`page-item ${currentPage === 0 ? "disabled" : ""}`}
-              >
-                <button
-                  className="page-link"
-                  onClick={() =>
-                    handlePageChange({ selected: currentPage - 1 })
-                  }
-                  disabled={currentPage === 0}
-                >
-                  <FaChevronLeft /> Trước
-                </button>
-              </li>
-
-              {Array.from({ length: meta.totalPages }, (_, i) => {
-                // Hiển thị tối đa 5 trang gần hiện tại
-                const start = Math.max(0, currentPage - 2);
-                const end = Math.min(meta.totalPages, start + 5);
-                const adjustedStart = Math.max(0, end - 5);
-
-                if (i < adjustedStart || i >= end) return null;
-
-                return (
-                  <li
-                    key={i}
-                    className={`page-item ${i === currentPage ? "active" : ""}`}
-                  >
-                    <button
-                      className="page-link"
-                      onClick={() => handlePageChange({ selected: i })}
-                    >
-                      {i + 1}
-                    </button>
-                  </li>
-                );
-              })}
-
-              <li
-                className={`page-item ${currentPage === meta.totalPages - 1 ? "disabled" : ""}`}
-              >
-                <button
-                  className="page-link"
-                  onClick={() =>
-                    handlePageChange({ selected: currentPage + 1 })
-                  }
-                  disabled={currentPage === meta.totalPages - 1}
-                >
-                  Sau <FaChevronRight />
-                </button>
-              </li>
-            </ul>
-          </nav>
-        </div>
-      )}
+      <AppPagination
+        pageCount={meta.totalPages ?? 1}
+        currentPage={currentPage}
+        total={meta.total}
+        itemLabel="bác sĩ"
+        onPageChange={(selected) => handlePageChange({ selected })}
+      />
 
       {/* ── Modals ── */}
       <DoctorFormModal
@@ -1299,10 +1157,7 @@ export default function AdminDoctorsPage() {
 
       <DoctorViewModal
         doc={modal === "view" ? selected : null}
-        onEdit={() => {
-          closeModal();
-          openEdit(selected?.id);
-        }}
+        onEdit={() => { closeModal(); openEdit(selected?.id); }}
         onClose={closeModal}
       />
 

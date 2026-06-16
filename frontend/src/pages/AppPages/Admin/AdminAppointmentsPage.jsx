@@ -15,11 +15,12 @@ import {
   FaUser,
   FaUserMd,
   FaHospital,
-  FaChevronLeft,
-  FaChevronRight,
+  FaStethoscope,
 } from "react-icons/fa";
+import { toast } from "react-toastify";
 import { appointmentService } from "../../../api/appService";
 import LoadingSpinner from "../../../components/Common/LoadingSpinner";
+import AppPagination from "../../../components/Common/AppPagination";
 import "./AdminAppointmentsPage.scss";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -28,52 +29,43 @@ import "./AdminAppointmentsPage.scss";
 const PAGE_LIMIT = 12;
 
 const STATUS_CFG = {
-  pending: { label: "Pending", color: "#f5a623", bg: "#fff8e6", icon: FaClock },
-  confirmed: {
-    label: "Confirmed",
-    color: "#0ba3a3",
-    bg: "#e6f7f7",
-    icon: FaCheckCircle,
-  },
-  completed: {
-    label: "Completed",
-    color: "#1a9e5c",
-    bg: "#e6f9f0",
-    icon: FaCheckDouble,
-  },
-  // no_show: { label: "No_show", color: "#1a9e5c", bg: "#e6f9f0", icon: FaCheckDouble },
-  cancelled: {
-    label: "Cancelled",
-    color: "#e24b4a",
-    bg: "#fef2f2",
-    icon: FaTimesCircle,
-  },
+  pending: { label: "Chờ xác nhận", color: "#f5a623", bg: "#fff8e6", icon: FaClock },
+  confirmed: { label: "Đã xác nhận", color: "#0ba3a3", bg: "#e6f7f7", icon: FaCheckCircle },
+  processing: { label: "Đang khám", color: "#3b82f6", bg: "#eff6ff", icon: FaStethoscope },
+  completed: { label: "Hoàn thành", color: "#1a9e5c", bg: "#e6f9f0", icon: FaCheckDouble },
+  no_show: { label: "Không đến", color: "#6b7280", bg: "#f3f4f6", icon: FaBan },
+  cancelled: { label: "Đã hủy", color: "#e24b4a", bg: "#fef2f2", icon: FaTimesCircle },
+};
+
+const TERMINAL_STATUSES = ["completed", "cancelled", "no_show"];
+
+const ADMIN_NEXT_STATUSES = {
+  pending: ["confirmed", "cancelled"],
+  confirmed: ["processing", "cancelled"],
+  processing: ["completed", "no_show", "cancelled"],
 };
 
 const PAYMENT_STATUS_CFG = {
-  pending: { label: "Pending", color: "#f5a623" },
-  completed: { label: "Completed", color: "#1a9e5c" },
-  refunded: { label: "Refunded", color: "#6b7f8e" },
-  failed: { label: "Failed", color: "#e24b4a" },
+  pending: { label: "Chờ thanh toán", color: "#f5a623" },
+  completed: { label: "Đã thanh toán", color: "#1a9e5c" },
+  refunded: { label: "Đã hoàn tiền", color: "#6b7f8e" },
+  failed: { label: "Thanh toán lỗi", color: "#e24b4a" },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 const formatCurrency = (amount) => {
-  if (!amount && amount !== 0) return "N/A";
-  return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-  }).format(amount);
+  if (!amount && amount !== 0) return "Chưa có";
+  return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(amount);
 };
 
 const formatDateTime = (dateStr, startTime, endTime) => {
-  if (!dateStr) return "N/A";
+  if (!dateStr) return "Chưa có";
   const date = new Date(dateStr).toLocaleDateString("vi-VN", {
     day: "2-digit",
     month: "2-digit",
-    year: "numeric",
+    year: "numeric"
   });
   if (startTime && endTime) {
     return `${startTime} - ${endTime} | ${date}`;
@@ -88,32 +80,26 @@ const AppointmentRow = ({ appt, onView, onEditStatus, onCancel }) => {
   const statusCfg = STATUS_CFG[appt.status] || STATUS_CFG.pending;
   const StatusIcon = statusCfg.icon;
 
-  const paymentStatus =
-    PAYMENT_STATUS_CFG[appt.paymentStatus] || PAYMENT_STATUS_CFG.pending;
+  const paymentStatus = PAYMENT_STATUS_CFG[appt.paymentStatus] || PAYMENT_STATUS_CFG.pending;
+  const isTerminal = TERMINAL_STATUSES.includes(appt.status);
 
   return (
     <div className="appt-row">
       <div className="appt-row__patient">
         <p className="appt-row__name">
-          <FaUser className="me-1 text-muted" />{" "}
-          {appt.patientProfile?.fullName || "N/A"}
+          <FaUser className="me-1 text-muted" /> {appt.patientProfile?.fullName || "Chưa có thông tin"}
         </p>
         <p className="appt-row__phone">
-          {appt.patientProfile?.phoneNumber || "N/A"}
+          {appt.patientProfile?.phoneNumber || "Chưa có SĐT"}
         </p>
       </div>
 
       <div className="appt-row__doctor">
         <p className="appt-row__name">
-          <FaUserMd className="me-1 text-primary" />{" "}
-          {appt.doctor?.user?.lastName} {appt.doctor?.user?.firstName}
+          <FaUserMd className="me-1 text-primary" /> {appt.doctor?.user?.lastName} {appt.doctor?.user?.firstName}
         </p>
-        <p
-          className="appt-row__hospital text-truncate"
-          title={appt.hospital?.name}
-        >
-          <FaHospital className="me-1 text-muted" />{" "}
-          {appt.hospital?.name || "N/A"}
+        <p className="appt-row__hospital text-truncate" title={appt.hospital?.name}>
+          <FaHospital className="me-1 text-muted" /> {appt.hospital?.name || "Chưa có thông tin"}
         </p>
       </div>
 
@@ -122,18 +108,13 @@ const AppointmentRow = ({ appt, onView, onEditStatus, onCancel }) => {
           {appt.timeSlot?.startTime} - {appt.timeSlot?.endTime}
         </span>
         <span className="text-muted small">
-          {appt.timeSlot?.date
-            ? new Date(appt.timeSlot.date).toLocaleDateString("vi-VN")
-            : "N/A"}
+          {appt.timeSlot?.date ? new Date(appt.timeSlot.date).toLocaleDateString("vi-VN") : "Chưa có"}
         </span>
       </div>
 
       <div className="appt-row__payment">
         <span className="fw-semibold">{formatCurrency(appt.totalAmount)}</span>
-        <span
-          className="small fw-semibold"
-          style={{ color: paymentStatus.color }}
-        >
+        <span className="small fw-semibold" style={{ color: paymentStatus.color }}>
           {paymentStatus.label}
         </span>
       </div>
@@ -148,26 +129,16 @@ const AppointmentRow = ({ appt, onView, onEditStatus, onCancel }) => {
       </div>
 
       <div className="appt-row__actions">
-        <button
-          className="appt-btn appt-btn--view"
-          onClick={() => onView(appt)}
-          title="View Detail"
-        >
+        <button className="appt-btn appt-btn--view" onClick={() => onView(appt)} title="Xem chi tiết">
           <FaEye />
         </button>
-        <button
-          className="appt-btn appt-btn--edit"
-          onClick={() => onEditStatus(appt)}
-          title="Change Status"
-        >
-          <FaEdit />
-        </button>
-        {appt.status !== "cancelled" && (
-          <button
-            className="appt-btn appt-btn--ban"
-            onClick={() => onCancel(appt)}
-            title="Force Cancel"
-          >
+        {!isTerminal && (
+          <button className="appt-btn appt-btn--edit" onClick={() => onEditStatus(appt)} title="Đổi trạng thái">
+            <FaEdit />
+          </button>
+        )}
+        {!isTerminal && (
+          <button className="appt-btn appt-btn--ban" onClick={() => onCancel(appt)} title="Hủy lịch hẹn">
             <FaBan />
           </button>
         )}
@@ -180,9 +151,10 @@ const AppointmentRow = ({ appt, onView, onEditStatus, onCancel }) => {
 // SUB-COMPONENT: StatusModal
 // ─────────────────────────────────────────────────────────────────────────────
 const StatusModal = ({ appt, onSave, onClose, saving }) => {
+  const [status, setStatus] = useState(appt?.status || "pending");
   if (!appt) return null;
-  const [status, setStatus] = useState(appt.status || "pending");
   const currentStatusCfg = STATUS_CFG[appt.status] || STATUS_CFG.pending;
+  const statusOptions = ADMIN_NEXT_STATUSES[appt.status] || [];
 
   return (
     <>
@@ -191,59 +163,32 @@ const StatusModal = ({ appt, onSave, onClose, saving }) => {
         <div className="modal-dialog modal-sm modal-dialog-centered">
           <div className="modal-content">
             <div className="modal-header">
-              <h5 className="modal-title">Change Status</h5>
-              <button
-                className="btn-close"
-                onClick={onClose}
-                disabled={saving}
-              />
+              <h5 className="modal-title">Cập nhật trạng thái</h5>
+              <button className="btn-close" onClick={onClose} disabled={saving} />
             </div>
             <div className="modal-body">
               <div className="text-center mb-3">
-                <span
-                  className="appt-status-badge mb-2 d-inline-flex"
-                  style={{
-                    color: currentStatusCfg.color,
-                    background: currentStatusCfg.bg,
-                  }}
-                >
-                  Current: {currentStatusCfg.label}
+                <span className="appt-status-badge mb-2 d-inline-flex" style={{ color: currentStatusCfg.color, background: currentStatusCfg.bg }}>
+                  Hiện tại: {currentStatusCfg.label}
                 </span>
-                <p className="mb-0 fw-semibold">
-                  {appt.patientProfile?.fullName}
-                </p>
-                <small className="text-muted">
-                  ID: {appt.id.substring(0, 8)}...
-                </small>
+                <p className="mb-0 fw-semibold">{appt.patientProfile?.fullName}</p>
+                <small className="text-muted">ID: {appt.id.substring(0, 8)}...</small>
               </div>
-              <label className="form-label">New Status</label>
-              <select
-                className="form-select"
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                disabled={saving}
-              >
-                {Object.entries(STATUS_CFG).map(([key, cfg]) => (
-                  <option key={key} value={key}>
-                    {cfg.label}
-                  </option>
-                ))}
+              <label className="form-label">Trạng thái mới</label>
+              <select className="form-select" value={status} onChange={e => setStatus(e.target.value)} disabled={saving}>
+                <option value={appt.status}>{currentStatusCfg.label}</option>
+                {statusOptions.map((key) => {
+                  const cfg = STATUS_CFG[key];
+                  return (
+                  <option key={key} value={key}>{cfg.label}</option>
+                  );
+                })}
               </select>
             </div>
             <div className="modal-footer border-0 pt-0">
-              <button
-                className="btn btn-light border w-100 mb-2"
-                onClick={onClose}
-                disabled={saving}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn btn-save w-100 m-0"
-                onClick={() => onSave(appt.id, status)}
-                disabled={saving}
-              >
-                {saving ? "Saving..." : "Save Status"}
+              <button className="btn btn-light border w-100 mb-2" onClick={onClose} disabled={saving}>Hủy</button>
+              <button className="btn btn-save w-100 m-0" onClick={() => onSave(appt.id, status)} disabled={saving || status === appt.status}>
+                {saving ? "Đang lưu..." : "Lưu trạng thái"}
               </button>
             </div>
           </div>
@@ -257,8 +202,8 @@ const StatusModal = ({ appt, onSave, onClose, saving }) => {
 // SUB-COMPONENT: CancelModal
 // ─────────────────────────────────────────────────────────────────────────────
 const CancelModal = ({ appt, onConfirm, onClose, saving }) => {
-  if (!appt) return null;
   const [cancelReason, setCancelReason] = useState("");
+  if (!appt) return null;
 
   return (
     <>
@@ -267,50 +212,31 @@ const CancelModal = ({ appt, onConfirm, onClose, saving }) => {
         <div className="modal-dialog modal-dialog-centered">
           <div className="modal-content">
             <div className="modal-header">
-              <h5 className="modal-title text-danger">
-                Force Cancel Appointment
-              </h5>
-              <button
-                className="btn-close"
-                onClick={onClose}
-                disabled={saving}
-              />
+              <h5 className="modal-title text-danger">Hủy lịch hẹn</h5>
+              <button className="btn-close" onClick={onClose} disabled={saving} />
             </div>
             <div className="modal-body py-4">
               <div className="alert alert-danger">
-                Are you sure you want to cancel this appointment for{" "}
-                <strong>{appt.patientProfile?.fullName}</strong>?
+                Bạn có chắc chắn muốn hủy lịch hẹn của <strong>{appt.patientProfile?.fullName}</strong> không?
               </div>
               <div className="mb-3">
-                <label className="form-label">Cancel Reason (Optional)</label>
+                <label className="form-label">Lý do hủy (không bắt buộc)</label>
                 <textarea
                   className="form-control"
                   rows="3"
-                  placeholder="Enter reason for cancellation..."
+                  placeholder="Nhập lý do hủy lịch..."
                   value={cancelReason}
                   onChange={(e) => setCancelReason(e.target.value)}
                   maxLength={500}
                   disabled={saving}
                 ></textarea>
-                <div className="form-text text-end">
-                  {cancelReason.length}/500
-                </div>
+                <div className="form-text text-end">{cancelReason.length}/500</div>
               </div>
             </div>
             <div className="modal-footer border-0 pt-0">
-              <button
-                className="btn btn-light border"
-                onClick={onClose}
-                disabled={saving}
-              >
-                Close
-              </button>
-              <button
-                className="btn btn-danger"
-                onClick={() => onConfirm(appt.id, cancelReason)}
-                disabled={saving}
-              >
-                {saving ? "Processing..." : "Confirm Cancel"}
+              <button className="btn btn-light border" onClick={onClose} disabled={saving}>Đóng</button>
+              <button className="btn btn-danger" onClick={() => onConfirm(appt.id, cancelReason)} disabled={saving}>
+                {saving ? "Đang xử lý..." : "Xác nhận hủy"}
               </button>
             </div>
           </div>
@@ -334,21 +260,18 @@ const AppointmentViewModal = ({ appt, onClose }) => {
         <div className="modal-dialog modal-lg modal-dialog-centered">
           <div className="modal-content">
             <div className="modal-header">
-              <h5 className="modal-title">Appointment Details</h5>
+              <h5 className="modal-title">Chi tiết lịch hẹn</h5>
               <button className="btn-close" onClick={onClose} />
             </div>
 
             <div className="modal-body">
               <div className="d-flex justify-content-between align-items-center mb-4 p-3 bg-light rounded border">
                 <div>
-                  <small className="text-muted d-block">Appointment ID</small>
+                  <small className="text-muted d-block">Mã lịch hẹn</small>
                   <strong className="text-dark">{appt.id}</strong>
                 </div>
                 <div>
-                  <span
-                    className="appt-status-badge px-3 py-2 fs-6"
-                    style={{ color: statusCfg.color, background: statusCfg.bg }}
-                  >
+                  <span className="appt-status-badge px-3 py-2 fs-6" style={{ color: statusCfg.color, background: statusCfg.bg }}>
                     <statusCfg.icon className="me-2" /> {statusCfg.label}
                   </span>
                 </div>
@@ -357,92 +280,60 @@ const AppointmentViewModal = ({ appt, onClose }) => {
               <div className="row g-4">
                 {/* Patient Info */}
                 <div className="col-md-6">
-                  <h6 className="fw-bold text-primary mb-3 border-bottom pb-2">
-                    <FaUser className="me-2" />
-                    Patient Information
-                  </h6>
+                  <h6 className="fw-bold text-primary mb-3 border-bottom pb-2"><FaUser className="me-2" />Thông tin bệnh nhân</h6>
                   <div className="mb-2">
-                    <small className="text-muted d-block">Full Name</small>
-                    <div className="fw-semibold">
-                      {appt.patientProfile?.fullName || "N/A"}
-                    </div>
+                    <small className="text-muted d-block">Họ và tên</small>
+                    <div className="fw-semibold">{appt.patientProfile?.fullName || "Chưa có thông tin"}</div>
                   </div>
                   <div className="mb-2">
-                    <small className="text-muted d-block">Phone Number</small>
-                    <div>{appt.patientProfile?.phoneNumber || "N/A"}</div>
+                    <small className="text-muted d-block">Số điện thoại</small>
+                    <div>{appt.patientProfile?.phoneNumber || "Chưa có SĐT"}</div>
                   </div>
                   <div className="mb-2">
-                    <small className="text-muted d-block">Date of Birth</small>
-                    <div>
-                      {appt.patientProfile?.dob
-                        ? new Date(appt.patientProfile.dob).toLocaleDateString(
-                            "vi-VN",
-                          )
-                        : "N/A"}
-                    </div>
+                    <small className="text-muted d-block">Ngày sinh</small>
+                    <div>{appt.patientProfile?.dob ? new Date(appt.patientProfile.dob).toLocaleDateString('vi-VN') : "Chưa có"}</div>
                   </div>
                   <div className="mb-2">
-                    <small className="text-muted d-block">Gender</small>
-                    <div className="text-capitalize">
-                      {appt.patientProfile?.gender || "N/A"}
-                    </div>
+                    <small className="text-muted d-block">Giới tính</small>
+                    <div className="text-capitalize">{appt.patientProfile?.gender || "Chưa có"}</div>
                   </div>
                 </div>
 
                 {/* Doctor Info */}
                 <div className="col-md-6">
-                  <h6 className="fw-bold text-primary mb-3 border-bottom pb-2">
-                    <FaUserMd className="me-2" />
-                    Doctor Information
-                  </h6>
+                  <h6 className="fw-bold text-primary mb-3 border-bottom pb-2"><FaUserMd className="me-2" />Thông tin bác sĩ</h6>
                   <div className="mb-2">
-                    <small className="text-muted d-block">Doctor Name</small>
-                    <div className="fw-semibold">
-                      {appt.doctor?.user?.lastName}{" "}
-                      {appt.doctor?.user?.firstName}
-                    </div>
+                    <small className="text-muted d-block">Tên bác sĩ</small>
+                    <div className="fw-semibold">{appt.doctor?.user?.lastName} {appt.doctor?.user?.firstName}</div>
                   </div>
                   <div className="mb-2">
-                    <small className="text-muted d-block">Hospital</small>
+                    <small className="text-muted d-block">Bệnh viện</small>
                     <div>{appt.hospital?.name}</div>
-                    <div className="small text-muted">
-                      {appt.hospital?.address}, {appt.hospital?.city}
-                    </div>
+                    <div className="small text-muted">{appt.hospital?.address}, {appt.hospital?.city}</div>
                   </div>
                   <div className="mb-2">
-                    <small className="text-muted d-block">Specialties</small>
+                    <small className="text-muted d-block">Chuyên khoa</small>
                     <div>
-                      {appt.doctor?.specialties
-                        ?.map((s) => s.specialty.name)
-                        .join(", ") || "N/A"}
+                      {appt.doctor?.specialties?.map(s => s.specialty.name).join(', ') || "Chưa có"}
                     </div>
                   </div>
                 </div>
 
                 {/* Schedule Info */}
                 <div className="col-md-6">
-                  <h6 className="fw-bold text-primary mb-3 border-bottom pb-2">
-                    <FaCalendarAlt className="me-2" />
-                    Schedule & Payment
-                  </h6>
+                  <h6 className="fw-bold text-primary mb-3 border-bottom pb-2"><FaCalendarAlt className="me-2" />Lịch khám và thanh toán</h6>
                   <div className="mb-2">
-                    <small className="text-muted d-block">Date & Time</small>
+                    <small className="text-muted d-block">Ngày và giờ</small>
                     <div className="fw-semibold">
-                      {formatDateTime(
-                        appt.timeSlot?.date,
-                        appt.timeSlot?.startTime,
-                        appt.timeSlot?.endTime,
-                      )}
+                      {formatDateTime(appt.timeSlot?.date, appt.timeSlot?.startTime, appt.timeSlot?.endTime)}
                     </div>
                   </div>
                   <div className="mb-2">
-                    <small className="text-muted d-block">Total Amount</small>
-                    <div className="fw-bold text-success">
-                      {formatCurrency(appt.totalAmount)}
-                    </div>
+                    <small className="text-muted d-block">Tổng tiền</small>
+                    <div className="fw-bold text-success">{formatCurrency(appt.totalAmount)}</div>
                   </div>
                   <div className="mb-2">
-                    <small className="text-muted d-block">Payment Status</small>
+                    <small className="text-muted d-block">Trạng thái thanh toán</small>
                     <div className="text-capitalize fw-semibold">
                       {appt.paymentStatus}
                     </div>
@@ -451,44 +342,27 @@ const AppointmentViewModal = ({ appt, onClose }) => {
 
                 {/* Additional Info */}
                 <div className="col-md-6">
-                  <h6 className="fw-bold text-primary mb-3 border-bottom pb-2">
-                    <FaEdit className="me-2" />
-                    Additional Details
-                  </h6>
+                  <h6 className="fw-bold text-primary mb-3 border-bottom pb-2"><FaEdit className="me-2" />Thông tin bổ sung</h6>
                   <div className="mb-2">
-                    <small className="text-muted d-block">
-                      Reason for visit
-                    </small>
-                    <div className="p-2 bg-light rounded border">
-                      {appt.reason || "None"}
-                    </div>
+                    <small className="text-muted d-block">Lý do khám</small>
+                    <div className="p-2 bg-light rounded border">{appt.reason || "Không ghi rõ"}</div>
                   </div>
                   {appt.cancelReason && (
                     <div className="mb-2 mt-3">
-                      <small className="text-danger d-block fw-semibold">
-                        Cancel Reason
-                      </small>
-                      <div className="p-2 bg-danger-subtle text-danger rounded border border-danger">
-                        {appt.cancelReason}
-                      </div>
+                      <small className="text-danger d-block fw-semibold">Lý do hủy</small>
+                      <div className="p-2 bg-danger-subtle text-danger rounded border border-danger">{appt.cancelReason}</div>
                     </div>
                   )}
                   <div className="mb-2 mt-3">
-                    <small className="text-muted d-block">Created At</small>
-                    <div>
-                      {appt.createdAt
-                        ? new Date(appt.createdAt).toLocaleString("vi-VN")
-                        : "N/A"}
-                    </div>
+                    <small className="text-muted d-block">Ngày tạo</small>
+                    <div>{appt.createdAt ? new Date(appt.createdAt).toLocaleString('vi-VN') : "Chưa có"}</div>
                   </div>
                 </div>
               </div>
             </div>
 
             <div className="modal-footer border-0 justify-content-end">
-              <button className="btn btn-light border px-4" onClick={onClose}>
-                Close
-              </button>
+              <button className="btn btn-light border px-4" onClick={onClose}>Đóng</button>
             </div>
           </div>
         </div>
@@ -545,8 +419,7 @@ export default function AdminAppointmentsPage() {
         setTotalCount(res.data?.meta?.total ?? 0);
       } else {
         setAppointments(respData?.items || respData?.appointments || []);
-        const metaObj =
-          respData?.meta || respData?.pagination || res.data?.meta || {};
+        const metaObj = respData?.meta || respData?.pagination || res.data?.meta || {};
         setTotalPages(metaObj.totalPages ?? 1);
         setTotalCount(metaObj.totalItems ?? metaObj.total ?? 0);
       }
@@ -593,16 +466,12 @@ export default function AdminAppointmentsPage() {
   const handleSaveStatus = async (id, newStatus) => {
     setSaving(true);
     try {
-      await appointmentService.adminUpdateAppointmentStatus(id, {
-        status: newStatus,
-      });
+      await appointmentService.adminUpdateAppointmentStatus(id, { status: newStatus });
       closeModal();
       fetchAppointments();
     } catch (err) {
       console.error("Failed to update status", err);
-      alert(
-        err?.response?.data?.message || "Failed to update status. See console.",
-      );
+      toast.error(err?.response?.data?.message || "Không thể cập nhật trạng thái.");
     } finally {
       setSaving(false);
     }
@@ -611,17 +480,12 @@ export default function AdminAppointmentsPage() {
   const handleConfirmCancel = async (id, reason) => {
     setSaving(true);
     try {
-      await appointmentService.adminCancelAppointment(id, {
-        cancelReason: reason,
-      });
+      await appointmentService.adminCancelAppointment(id, { cancelReason: reason });
       closeModal();
       fetchAppointments();
     } catch (err) {
       console.error("Failed to cancel appointment", err);
-      alert(
-        err?.response?.data?.message ||
-          "Failed to cancel appointment. See console.",
-      );
+      toast.error(err?.response?.data?.message || "Không thể hủy lịch hẹn.");
     } finally {
       setSaving(false);
     }
@@ -650,94 +514,52 @@ export default function AdminAppointmentsPage() {
           <div className="col-md-4">
             <form onSubmit={handleSearchSubmit}>
               <div className="input-group">
-                <span className="input-group-text bg-light border-end-0">
-                  <FaSearch className="text-muted" />
-                </span>
+                <span className="input-group-text bg-light border-end-0"><FaSearch className="text-muted" /></span>
                 <input
                   type="text"
                   className="form-control border-start-0 bg-light"
                   placeholder="Tìm kiếm bệnh nhân, bác sĩ..."
                   value={inputSearch}
-                  onChange={(e) => setInputSearch(e.target.value)}
+                  onChange={e => setInputSearch(e.target.value)}
                 />
-                <button
-                  type="submit"
-                  className="btn btn-primary px-3"
-                  style={{ backgroundColor: "#0ba3a3", borderColor: "#0ba3a3" }}
-                >
-                  Tìm
-                </button>
+                <button type="submit" className="btn btn-primary px-3" style={{ backgroundColor: "#0ba3a3", borderColor: "#0ba3a3" }}>Tìm</button>
               </div>
             </form>
           </div>
           <div className="col-md-2">
-            <select
-              className="form-select"
-              value={filterStatus}
-              onChange={(e) => {
-                setFilterStatus(e.target.value);
-                handleFilterChange();
-              }}
-            >
+            <select className="form-select" value={filterStatus} onChange={(e) => { setFilterStatus(e.target.value); handleFilterChange(); }}>
               <option value="">Tất cả trạng thái</option>
               {Object.entries(STATUS_CFG).map(([key, cfg]) => (
-                <option key={key} value={key}>
-                  {cfg.label}
-                </option>
+                <option key={key} value={key}>{cfg.label}</option>
               ))}
             </select>
           </div>
           <div className="col-md-3">
             <div className="input-group">
-              <span className="input-group-text bg-light text-muted">Từ</span>
-              <input
-                type="date"
-                className="form-control"
-                value={fromDate}
-                onChange={(e) => {
-                  setFromDate(e.target.value);
-                  handleFilterChange();
-                }}
-              />
+              <span className="input-group-text bg-light text-muted">Khám từ</span>
+              <input type="date" className="form-control" value={fromDate} onChange={(e) => { setFromDate(e.target.value); handleFilterChange(); }} />
             </div>
           </div>
           <div className="col-md-3">
             <div className="input-group">
-              <span className="input-group-text bg-light text-muted">Đến</span>
-              <input
-                type="date"
-                className="form-control"
-                value={toDate}
-                onChange={(e) => {
-                  setToDate(e.target.value);
-                  handleFilterChange();
-                }}
-              />
+              <span className="input-group-text bg-light text-muted">Khám đến</span>
+              <input type="date" className="form-control" value={toDate} onChange={(e) => { setToDate(e.target.value); handleFilterChange(); }} />
             </div>
           </div>
         </div>
       </div>
 
       {/* List */}
-      <div
-        className="appts-list position-relative"
-        style={{ minHeight: "200px" }}
-      >
+      <div className="appts-list position-relative" style={{ minHeight: "200px" }}>
         {loading && (
-          <div
-            className="position-absolute w-100 h-100 d-flex justify-content-center align-items-center"
-            style={{ backgroundColor: "rgba(255,255,255,0.7)", zIndex: 10 }}
-          >
+          <div className="position-absolute w-100 h-100 d-flex justify-content-center align-items-center" style={{ backgroundColor: "rgba(255,255,255,0.7)", zIndex: 10 }}>
             <LoadingSpinner />
           </div>
         )}
 
         {!loading && appointments.length === 0 ? (
           <div className="appts-empty py-5 text-center text-muted">
-            <FaCalendarAlt
-              className="appts-empty__icon mb-3"
-              style={{ fontSize: "3rem", opacity: 0.2 }}
-            />
+            <FaCalendarAlt className="appts-empty__icon mb-3" style={{ fontSize: '3rem', opacity: 0.2 }} />
             <p className="mb-0 fs-5">Không tìm thấy lịch hẹn nào.</p>
             <span className="small">Vui lòng thay đổi bộ lọc tìm kiếm.</span>
           </div>
@@ -754,78 +576,35 @@ export default function AdminAppointmentsPage() {
         )}
       </div>
 
-      {/* Pagination */}
-      {!loading && totalPages > 1 && (
-        <div className="mt-4">
-          <nav aria-label="Page navigation">
-            <ul className="pagination justify-content-center mb-3">
-              <li
-                className={`page-item ${currentPage === 0 ? "disabled" : ""}`}
-              >
-                <button
-                  className="page-link"
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 0}
-                >
-                  <FaChevronLeft className="me-1" /> Trước
-                </button>
-              </li>
-
-              {Array.from({ length: totalPages }, (_, i) => {
-                const start = Math.max(0, currentPage - 2);
-                const end = Math.min(totalPages, start + 5);
-                const adjustedStart = Math.max(0, end - 5);
-
-                if (i < adjustedStart || i >= end) return null;
-
-                return (
-                  <li
-                    key={i}
-                    className={`page-item ${i === currentPage ? "active" : ""}`}
-                  >
-                    <button
-                      className="page-link"
-                      onClick={() => handlePageChange(i)}
-                    >
-                      {i + 1}
-                    </button>
-                  </li>
-                );
-              })}
-
-              <li
-                className={`page-item ${currentPage === totalPages - 1 ? "disabled" : ""}`}
-              >
-                <button
-                  className="page-link"
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === totalPages - 1}
-                >
-                  Sau <FaChevronRight className="ms-1" />
-                </button>
-              </li>
-            </ul>
-          </nav>
-        </div>
-      )}
+      <AppPagination
+        pageCount={totalPages}
+        currentPage={currentPage}
+        total={totalCount}
+        itemLabel="lịch hẹn"
+        onPageChange={handlePageChange}
+      />
 
       {/* Modals */}
       <AppointmentViewModal
         appt={modal === "view" ? selectedAppt : null}
         onClose={closeModal}
       />
-      <StatusModal
-        appt={modal === "status" ? selectedAppt : null}
-        onSave={handleSaveStatus}
-        onClose={closeModal}
-        saving={saving}
-      />
-      <CancelModal
-        appt={modal === "cancel" ? selectedAppt : null}
-        onConfirm={handleConfirmCancel}
-        onClose={closeModal}
-        saving={saving}
-      />
+      {modal === "status" && (
+        <StatusModal
+          appt={selectedAppt}
+          onSave={handleSaveStatus}
+          onClose={closeModal}
+          saving={saving}
+        />
+      )}
+      {modal === "cancel" && (
+        <CancelModal
+          appt={selectedAppt}
+          onConfirm={handleConfirmCancel}
+          onClose={closeModal}
+          saving={saving}
+        />
+      )}
     </div>
   );
 }

@@ -7,3 +7,4 @@ export {default as AdminHospitalsPage} from "./AdminHospitalsPage";
 export {default as AdminUsersPage} from "./AdminUsersPage";
 export {default as AdminReportsPage} from "./AdminReportsPage";
 export {default as AdminSettingsPage} from "./AdminSettingsPage";
+export {default as AdminReviewsPage} from "./AdminReviewsPage";

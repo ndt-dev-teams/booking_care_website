@@ -233,36 +233,28 @@ $shadow-hov: 0 12px 40px rgba(13, 43, 69, 0.14);
   font-weight: 600;
   cursor: pointer;
   border: none;
-  transition:
-    background 0.15s,
-    color 0.15s;
-
+  transition: background 0.15s, color 0.15s;
+  
   &--view {
     color: $primary-dk;
     background: transparent;
     flex: 1;
     justify-content: center;
-    &:hover {
-      background: $primary-lt;
-    }
+    &:hover { background: $primary-lt; }
   }
   &--edit {
     color: $star;
     background: transparent;
     flex: 1;
     justify-content: center;
-    &:hover {
-      background: $star-lt;
-    }
+    &:hover { background: $star-lt; }
   }
   &--delete {
     color: $danger;
     background: transparent;
     width: 32px;
     justify-content: center;
-    &:hover {
-      background: $danger-lt;
-    }
+    &:hover { background: $danger-lt; }
   }
 }
 

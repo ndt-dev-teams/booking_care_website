@@ -20,7 +20,9 @@ function StatCard({ label, value, icon: Icon, color, subText }) {
   return (
     <div className={`admin-stat-card admin-stat-card--${color}`}>
       <div className="admin-stat-card__top">
-        <div className="admin-stat-card__icon">{Icon && <Icon />}</div>
+        <div className="admin-stat-card__icon">
+          {Icon && <Icon />}
+        </div>
       </div>
       <p className="admin-stat-card__value">{value}</p>
       <p className="admin-stat-card__label">{label}</p>
@@ -53,9 +55,7 @@ function DonutChart({ data, total, title, icon: Icon }) {
       <div className="admin-donut-wrap">
         <div
           className="admin-donut"
-          style={{
-            background: total === 0 ? "#e2ebf0" : `conic-gradient(${gradient})`,
-          }}
+          style={{ background: total === 0 ? "#e2ebf0" : `conic-gradient(${gradient})` }}
         >
           <div className="admin-donut__hole">
             <p className="admin-donut__total">{total}</p>
@@ -139,8 +139,7 @@ export default function AdminDashboardPage() {
     );
   }
 
-  const { users, doctors, hospitals, specialties, appointments, content } =
-    stats;
+  const { users, doctors, hospitals, specialties, appointments, content } = stats;
 
   const statsData = [
     {
@@ -195,46 +194,18 @@ export default function AdminDashboardPage() {
 
   // Chỉ lấy những status có dữ liệu để vẽ biểu đồ gọn gàng, hoặc giữ lại label "Chờ xác nhận" nếu rỗng
   const apptStatusData = [
-    {
-      label: "Chờ xác nhận",
-      value: appointments?.byStatus?.pending || 0,
-      color: "#f5a623",
-    },
-    {
-      label: "Đã xác nhận",
-      value: appointments?.byStatus?.confirmed || 0,
-      color: "#534ab7",
-    },
-    {
-      label: "Đang xử lý",
-      value: appointments?.byStatus?.processing || 0,
-      color: "#0ba3a3",
-    },
-    {
-      label: "Hoàn thành",
-      value: appointments?.byStatus?.completed || 0,
-      color: "#1a9e5c",
-    },
-    {
-      label: "Đã hủy",
-      value: appointments?.byStatus?.cancelled || 0,
-      color: "#e24b4a",
-    },
-    {
-      label: "Vắng mặt",
-      value: appointments?.byStatus?.no_show || 0,
-      color: "#6b7f8e",
-    },
+    { label: "Chờ xác nhận", value: appointments?.byStatus?.pending || 0, color: "#f5a623" },
+    { label: "Đã xác nhận", value: appointments?.byStatus?.confirmed || 0, color: "#534ab7" },
+    { label: "Đang xử lý", value: appointments?.byStatus?.processing || 0, color: "#0ba3a3" },
+    { label: "Hoàn thành", value: appointments?.byStatus?.completed || 0, color: "#1a9e5c" },
+    { label: "Đã hủy", value: appointments?.byStatus?.cancelled || 0, color: "#e24b4a" },
+    { label: "Vắng mặt", value: appointments?.byStatus?.no_show || 0, color: "#6b7f8e" },
   ].filter((d) => d.value > 0 || d.label === "Chờ xác nhận");
 
   const roleData = [
     { label: "Bệnh nhân", value: users?.byRole?.user || 0, color: "#0ba3a3" },
     { label: "Bác sĩ", value: users?.byRole?.doctor || 0, color: "#1a9e5c" },
-    {
-      label: "Quản trị viên",
-      value: users?.byRole?.admin || 0,
-      color: "#534ab7",
-    },
+    { label: "Quản trị viên", value: users?.byRole?.admin || 0, color: "#534ab7" },
   ].filter((d) => d.value > 0 || d.label === "Bệnh nhân");
 
   return (

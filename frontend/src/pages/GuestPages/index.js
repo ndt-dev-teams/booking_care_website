@@ -8,3 +8,4 @@ export {default as HospitalDetailPage} from "./HospitalDetailPage";
 export {default as SearchPage} from "./SearchPage";
 export {default as AboutPage} from "./AboutPage";
 export {default as ContactPage} from "./ContactPage";
+export {default as PaymentResult} from "./PaymentResult";

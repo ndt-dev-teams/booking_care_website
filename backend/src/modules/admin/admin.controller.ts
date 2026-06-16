@@ -22,6 +22,13 @@ export class AdminPublicController {
       data,
     };
   }
+
+  @Get('health')
+  async getHealth() {
+    return {
+      message: 'OK',
+    }
+  }
 }
 
 @Roles(UserRole.ADMIN)

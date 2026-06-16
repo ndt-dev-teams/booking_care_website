@@ -1,26 +1,90 @@
-import { useState, useEffect } from "react";
-import ReactPaginate from "react-paginate";
-import { FaChevronLeft, FaChevronRight, FaClipboardList, FaHospital, FaStar } from "react-icons/fa6";
-import StarRating from "../../components/Common/StarRating";
+import { useState, useEffect, useRef } from "react";
+import ReactPaginateModule from "react-paginate";
+import { FaChevronLeft, FaChevronRight, FaClipboardList, FaHospital, FaStar, FaMagnifyingGlass, FaChevronDown, FaXmark } from "react-icons/fa6";
 import { Link } from "react-router";
-import { doctorService } from "../../api/appService";
+import { doctorService, specialtyService } from "../../api/appService";
+import LoadingSpinner from "../../components/Common/LoadingSpinner";
+import StarRating from "../../components/Common/StarRating";
 import "./DoctorsPage.scss";
 
 const DEFAULT_AVATAR = "https://ui-avatars.com/api/?background=0fa39b&color=fff&size=200&name=";
 const PAGE_LIMIT = 12;
+const DEBOUNCE_MS = 400;
+const ReactPaginate = ReactPaginateModule.default || ReactPaginateModule;
 
 const DoctorsPage = () => {
   const [doctors, setDoctors] = useState([]);
   const [meta, setMeta] = useState({ total: 0, page: 1, totalPages: 1 });
-  const [currentPage, setCurrentPage] = useState(0); // react-paginate dùng 0-indexed
+  const [currentPage, setCurrentPage] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Search & filter state
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [specialties, setSpecialties] = useState([]);
+  const [selectedSpecialty, setSelectedSpecialty] = useState(null);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const debounceTimer = useRef(null);
+  const dropdownRef = useRef(null);
+
+  // Load specialties once on mount
+  useEffect(() => {
+    specialtyService
+      .specialties()
+      .then((res) => {
+        setSpecialties(res.data?.data || []);
+      })
+      .catch((err) => console.error("Lỗi lấy danh sách chuyên khoa:", err));
+  }, []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Debounce search input
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchInput(value);
+    clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      setSearchQuery(value.trim());
+      setCurrentPage(0);
+    }, DEBOUNCE_MS);
+  };
+
+  const handleClearSearch = () => {
+    setSearchInput("");
+    setSearchQuery("");
+    setCurrentPage(0);
+    clearTimeout(debounceTimer.current);
+  };
+
+  const handleSelectSpecialty = (specialty) => {
+    setSelectedSpecialty(specialty);
+    setIsDropdownOpen(false);
+    setCurrentPage(0);
+  };
 
   useEffect(() => {
     let isMounted = true;
     setIsLoading(true);
 
+    const params = {
+      page: currentPage + 1,
+      limit: PAGE_LIMIT,
+      ...(searchQuery && { search: searchQuery }),
+      ...(selectedSpecialty && { specialtyId: selectedSpecialty.id }),
+    };
+
     doctorService
-      .doctors({ page: currentPage + 1, limit: PAGE_LIMIT })
+      .doctors(params)
       .then((res) => {
         if (!isMounted) return;
         const data = res.data?.data || [];
@@ -37,12 +101,15 @@ const DoctorsPage = () => {
     return () => {
       isMounted = false;
     };
-  }, [currentPage]);
+  }, [currentPage, searchQuery, selectedSpecialty]);
 
   const handlePageChange = ({ selected }) => {
     setCurrentPage(selected);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
+
+  const totalPages = Math.max(Number(meta.totalPages) || 1, 1);
+  const safeCurrentPage = Math.min(currentPage, totalPages - 1);
 
   return (
     <>
@@ -59,13 +126,77 @@ const DoctorsPage = () => {
           </p>
         </div>
 
+        {/* Search & Filter bar */}
+        <div className="doctors-filter-bar">
+          <div className="doctors-search-wrap">
+            <FaMagnifyingGlass className="search-icon" />
+            <input
+              type="text"
+              className="doctors-search-input"
+              placeholder="Tìm kiếm theo tên bác sĩ..."
+              value={searchInput}
+              onChange={handleSearchChange}
+            />
+            {searchInput && (
+              <button className="search-clear-btn" onClick={handleClearSearch} aria-label="Xoá tìm kiếm">
+                <FaXmark />
+              </button>
+            )}
+          </div>
+
+          <div className="doctors-specialty-dropdown" ref={dropdownRef}>
+            <button
+              className={`specialty-dropdown-trigger ${isDropdownOpen ? "open" : ""}`}
+              onClick={() => setIsDropdownOpen((prev) => !prev)}
+            >
+              <FaClipboardList className="trigger-icon" />
+              <span>{selectedSpecialty ? selectedSpecialty.name : "Tất cả chuyên khoa"}</span>
+              <FaChevronDown className={`trigger-chevron ${isDropdownOpen ? "rotated" : ""}`} />
+            </button>
+
+            {isDropdownOpen && (
+              <div className="specialty-dropdown-menu">
+                <button
+                  className={`specialty-dropdown-item ${!selectedSpecialty ? "active" : ""}`}
+                  onClick={() => handleSelectSpecialty(null)}
+                >
+                  Tất cả chuyên khoa
+                </button>
+                {specialties.map((s) => (
+                  <button
+                    key={s.id}
+                    className={`specialty-dropdown-item ${selectedSpecialty?.id === s.id ? "active" : ""}`}
+                    onClick={() => handleSelectSpecialty(s)}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Active filters display */}
+        {(searchQuery || selectedSpecialty) && (
+          <div className="doctors-active-filters">
+            {searchQuery && (
+              <span className="filter-tag">
+                Tìm: "{searchQuery}"
+                <button onClick={handleClearSearch}><FaXmark /></button>
+              </span>
+            )}
+            {selectedSpecialty && (
+              <span className="filter-tag">
+                {selectedSpecialty.name}
+                <button onClick={() => { setSelectedSpecialty(null); setCurrentPage(0); }}><FaXmark /></button>
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Doctors List */}
         {isLoading ? (
-          <div className="doctors-loading">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="doctor-item-skeleton" />
-            ))}
-          </div>
+          <LoadingSpinner />
         ) : doctors.length === 0 ? (
           <div className="doctors-empty">
             <FaStar size={48} className="empty-icon" />
@@ -74,31 +205,25 @@ const DoctorsPage = () => {
         ) : (
           <div className="doctors-list">
             {doctors.map((doctor) => {
-              const { id, slug, user, specialties, hospitals, rating, totalReviews, consultationFee, experience } = doctor;
+              const { id, slug, user, specialties, hospitals, rating, totalReviews, consultationFee, experience, imgURL } = doctor;
               const fullName = `${user?.lastName || ""} ${user?.firstName || ""}`.trim();
-              const avatar = user?.avatar
-                ? user.avatar
-                : `${DEFAULT_AVATAR}${encodeURIComponent(fullName)}`;
-              const primarySpecialty =
-                specialties?.find((s) => s.isPrimary)?.specialty?.name ||
-                specialties?.[0]?.specialty?.name ||
-                "Không có thông tin";
-              const hospitalInfo = hospitals?.[0]?.hospital;
+              const avatar = imgURL || `${DEFAULT_AVATAR}${encodeURIComponent(fullName)}`;
+              const primarySpecialty = specialties?.find((s) => s.isPrimary)?.specialty?.name || "Không có thông tin";
+
+              const primaryHospital = hospitals?.[0];
+              const hospitalInfo = primaryHospital?.hospital;
               const hospitalDisplay = hospitalInfo
                 ? `${hospitalInfo.name}, ${hospitalInfo.city}`
                 : "Không có thông tin";
-              const priceDisplay = consultationFee
-                ? `${consultationFee.toLocaleString("vi-VN")}đ`
-                : "Liên hệ";
-              const workingDays = hospitals?.[0]?.workingDays;
-              const startTime = hospitals?.[0]?.startTime;
-              const endTime = hospitals?.[0]?.endTime;
+              const { workingDays, startTime, endTime } = primaryHospital || {};
+
+              const priceDisplay = consultationFee ? `${consultationFee.toLocaleString("vi-VN")}đ` : "Không có thông tin";
 
               return (
                 <div key={id} className="doctor-item">
                   <div className="doctor-item-avatar-wrap">
                     <img src={avatar} alt={fullName} className="doctor-item-avatar" />
-                    <span className="doctor-item-badge available">Còn lịch</span>
+                    {/* <span className="doctor-item-badge available">Còn lịch</span> */}
                   </div>
                   <div className="doctor-item-info">
                     <div className="doctor-item-name">{fullName}</div>
@@ -112,9 +237,9 @@ const DoctorsPage = () => {
                     </div>
                     {(startTime || endTime) && (
                       <div className="doctor-item-schedule">
-                        🕐 {startTime} – {endTime}
+                        {startTime} – {endTime}
                         {workingDays && (
-                          <span className="working-days ms-2">
+                          <span className="ms-2">
                             ({workingDays.split(",").join(", ")})
                           </span>
                         )}
@@ -122,10 +247,7 @@ const DoctorsPage = () => {
                     )}
                     <div className="doctor-item-footer">
                       <div className="doctor-item-rating">
-                        <StarRating rating={rating || 0} half={!Number.isInteger(rating || 0)} />
-                        <span className="rating-text">
-                          {rating ? rating.toFixed(1) : "Chưa có"} ({totalReviews || 0} đánh giá)
-                        </span>
+                        <StarRating rating={rating || 0} showValue reviewCount={totalReviews || 0} size={13} />
                       </div>
                       {experience && (
                         <span className="doctor-item-exp">{experience} năm KN</span>
@@ -146,14 +268,14 @@ const DoctorsPage = () => {
         )}
 
         {/* Pagination */}
-        {!isLoading && meta.totalPages > 1 && (
+        {!isLoading && totalPages > 1 && (
           <div className="doctors-pagination-wrap">
             <ReactPaginate
-              pageCount={meta.totalPages}
+              pageCount={totalPages}
               pageRangeDisplayed={5}
               marginPagesDisplayed={1}
               onPageChange={handlePageChange}
-              forcePage={currentPage}
+              forcePage={safeCurrentPage}
               previousLabel={<FaChevronLeft />}
               nextLabel={<FaChevronRight />}
               breakLabel="..."
@@ -170,7 +292,7 @@ const DoctorsPage = () => {
               disabledClassName="disabled"
             />
             <div className="pagination-info">
-              Trang {currentPage + 1} / {meta.totalPages} &nbsp;·&nbsp; Tổng {meta.total} bác sĩ
+              Trang {safeCurrentPage + 1} / {totalPages} &nbsp;·&nbsp; Tổng {meta.total} bác sĩ
             </div>
           </div>
         )}

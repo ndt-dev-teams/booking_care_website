@@ -28,6 +28,7 @@ import {
   UpdateMeDto,
 } from './dto/auth.dto';
 import { PrismaService } from '@/prisma/prisma.service';
+import { MailService } from '@modules/mail/mail.service';
 
 type AccountUser = Pick<
   User,
@@ -54,6 +55,7 @@ export class AuthService implements OnApplicationBootstrap {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly mailService: MailService,
   ) {}
 
   // ─── Lifecycle ───────────────────────────────────────────────────────────────
@@ -194,20 +196,40 @@ export class AuthService implements OnApplicationBootstrap {
       return { message: 'Email đã được xác thực' };
     }
 
-    return this.createAccountTokenResponse(
+    const accountLink = await this.createAccountTokenLink(
       user.id,
       AccountTokenType.email_verification,
       EMAIL_VERIFICATION_TTL_MS,
       `/auth/verify-email`,
-      'Đã tạo link xác thực email',
+    );
+
+    await this.mailService.sendEmailVerification({
+      to: user.email,
+      name: this.getDisplayName(user),
+      link: accountLink.link,
+      expiresIn: '24 giờ',
+    });
+
+    return this.createAccountTokenResponse(
+      'Đã gửi email xác thực. Vui lòng kiểm tra hộp thư của bạn.',
+      accountLink,
     );
   }
 
   async confirmEmailVerification(token: string) {
-    const accountToken = await this.findValidAccountToken(
-      token,
-      AccountTokenType.email_verification,
-    );
+    const accountToken = await this.findEmailVerificationToken(token);
+
+    if (accountToken.usedAt) {
+      if (accountToken.user.isEmailVerified) {
+        return this.toAccountUser(accountToken.user);
+      }
+
+      throw new BadRequestException('Token đã được sử dụng');
+    }
+
+    if (accountToken.expiresAt <= new Date()) {
+      throw new BadRequestException('Token không hợp lệ hoặc đã hết hạn');
+    }
 
     const [user] = await this.prisma.$transaction([
       this.prisma.user.update({
@@ -224,9 +246,10 @@ export class AuthService implements OnApplicationBootstrap {
   }
 
   async requestPasswordReset(email: string) {
+    const genericMessage =
+      'Nếu email tồn tại trong hệ thống, link khôi phục mật khẩu đã được gửi.';
     const genericResponse = {
-      message:
-        'Nếu email tồn tại trong hệ thống, link khôi phục mật khẩu đã được tạo.',
+      message: genericMessage,
     };
 
     const user = await this.prisma.user.findUnique({ where: { email } });
@@ -239,15 +262,21 @@ export class AuthService implements OnApplicationBootstrap {
       return genericResponse;
     }
 
-    const response = await this.createAccountTokenResponse(
+    const accountLink = await this.createAccountTokenLink(
       user.id,
       AccountTokenType.password_reset,
       PASSWORD_RESET_TTL_MS,
       `/auth/reset-password`,
-      genericResponse.message,
     );
 
-    return response;
+    await this.mailService.sendPasswordReset({
+      to: user.email,
+      name: this.getDisplayName(user),
+      link: accountLink.link,
+      expiresIn: '30 phút',
+    });
+
+    return this.createAccountTokenResponse(genericMessage, accountLink);
   }
 
   async confirmPasswordReset(dto: ConfirmPasswordResetDto) {
@@ -627,12 +656,11 @@ export class AuthService implements OnApplicationBootstrap {
     });
   }
 
-  private async createAccountTokenResponse(
+  private async createAccountTokenLink(
     userId: string,
     type: AccountTokenType,
     ttlMs: number,
     routePrefix: string,
-    message: string,
   ) {
     const rawToken = randomBytes(32).toString('hex');
     const tokenHash = await bcrypt.hash(
@@ -656,15 +684,29 @@ export class AuthService implements OnApplicationBootstrap {
       }),
     ]);
 
+    return {
+      token: rawToken,
+      link: `${this.getFrontendUrl()}${routePrefix}/${rawToken}`,
+    };
+  }
+
+  private createAccountTokenResponse(
+    message: string,
+    accountLink: { token: string; link: string },
+  ) {
     if (this.configService.get<string>('NODE_ENV') === 'production') {
       return { message };
     }
 
     return {
       message,
-      devToken: rawToken,
-      devLink: `${this.getFrontendUrl()}${routePrefix}/${rawToken}`,
+      devToken: accountLink.token,
+      devLink: accountLink.link,
     };
+  }
+
+  private getDisplayName(user: Pick<User, 'firstName' | 'lastName'>) {
+    return [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
   }
 
   private async findValidAccountToken(token: string, type: AccountTokenType) {
@@ -674,6 +716,24 @@ export class AuthService implements OnApplicationBootstrap {
         usedAt: null,
         expiresAt: { gt: new Date() },
       },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+
+    for (const candidate of candidates) {
+      const isMatch = await bcrypt.compare(token, candidate.tokenHash);
+      if (isMatch) return candidate;
+    }
+
+    throw new BadRequestException('Token không hợp lệ hoặc đã hết hạn');
+  }
+
+  private async findEmailVerificationToken(token: string) {
+    const candidates = await this.prisma.accountToken.findMany({
+      where: {
+        type: AccountTokenType.email_verification,
+      },
+      include: { user: true },
       orderBy: { createdAt: 'desc' },
       take: 20,
     });

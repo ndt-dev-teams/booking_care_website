@@ -4,8 +4,11 @@ import {
   BadRequestException,
   ForbiddenException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '@/prisma/prisma.service';
+import { MailService } from '@modules/mail/mail.service';
 import {
   AppointmentStatus,
   CancelledBy,
@@ -127,7 +130,13 @@ const APPOINTMENT_DETAIL_SELECT = {
 
 @Injectable()
 export class AppointmentService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(AppointmentService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+    private readonly configService: ConfigService,
+  ) {}
 
   // ─── Helpers ───────────────────────────────────────────────
 
@@ -292,6 +301,76 @@ export class AppointmentService {
     }
 
     return updated;
+  }
+
+  async sendConfirmationEmailIfConfirmedTransition(
+    previousStatus: AppointmentStatus,
+    appointmentId: string,
+  ) {
+    if (previousStatus === AppointmentStatus.confirmed) return;
+
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      select: {
+        id: true,
+        status: true,
+        paymentStatus: true,
+        totalAmount: true,
+        patientProfile: {
+          select: {
+            fullName: true,
+            user: { select: { email: true } },
+          },
+        },
+        doctor: {
+          select: {
+            user: { select: { firstName: true, lastName: true } },
+          },
+        },
+        hospital: {
+          select: { name: true, address: true },
+        },
+        timeSlot: {
+          select: { date: true, startTime: true, endTime: true },
+        },
+      },
+    });
+
+    if (!appointment || appointment.status !== AppointmentStatus.confirmed) {
+      return;
+    }
+
+    try {
+      await this.mailService.sendAppointmentConfirmed({
+        to: appointment.patientProfile.user.email,
+        patientName: appointment.patientProfile.fullName,
+        doctorName: this.getDisplayName(appointment.doctor.user),
+        hospitalName: appointment.hospital.name,
+        hospitalAddress: appointment.hospital.address,
+        appointmentDate: appointment.timeSlot.date,
+        startTime: appointment.timeSlot.startTime,
+        endTime: appointment.timeSlot.endTime,
+        totalAmount: appointment.totalAmount,
+        paymentStatus: appointment.paymentStatus,
+        appointmentLink: `${this.getFrontendUrl()}/app/user/appointments`,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Không thể gửi email xác nhận lịch hẹn ${appointment.id}:`,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+
+  private getFrontendUrl(): string {
+    return this.configService.get<string>(
+      'FRONTEND_URL',
+      'http://localhost:3564',
+    );
+  }
+
+  private getDisplayName(user: { firstName: string; lastName: string }) {
+    return [user.lastName, user.firstName].filter(Boolean).join(' ').trim();
   }
 
   // ─── User APIs ─────────────────────────────────────────────
@@ -691,7 +770,7 @@ export class AppointmentService {
       updates.cancelledBy = CancelledBy.doctor;
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const updated = await this.updateAppointmentWithPaymentPolicy(
         tx,
         appt,
@@ -707,6 +786,13 @@ export class AppointmentService {
 
       return updated;
     });
+
+    await this.sendConfirmationEmailIfConfirmedTransition(
+      appt.status,
+      updated.id,
+    );
+
+    return updated;
   }
 
   // ─── Admin APIs ────────────────────────────────────────────
@@ -847,7 +933,7 @@ export class AppointmentService {
 
     const shouldReleaseSlot = dto.status === AppointmentStatus.cancelled;
 
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const updated = await this.updateAppointmentWithPaymentPolicy(tx, appt, {
         status: dto.status,
         ...(shouldReleaseSlot && { cancelledBy: CancelledBy.admin }),
@@ -862,6 +948,13 @@ export class AppointmentService {
 
       return updated;
     });
+
+    await this.sendConfirmationEmailIfConfirmedTransition(
+      appt.status,
+      updated.id,
+    );
+
+    return updated;
   }
 
   /**

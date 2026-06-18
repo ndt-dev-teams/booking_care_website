@@ -1,24 +1,47 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
+import { useDispatch, useSelector } from "react-redux";
 import authService from "../../api/authService";
+import { setUser } from "../../store/slices/authSlice";
+import { getRoleSettingsPath } from "../../utils/rolePaths";
 import "./VerifyEmailPage.scss";
 
 const VerifyEmailPage = () => {
   const { token } = useParams();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const { isAuthenticated, user } = useSelector((state) => state.auth);
+  const currentRole = user?.role;
+  const donePath = isAuthenticated ? getRoleSettingsPath(currentRole) : "/auth/login";
   const [status, setStatus] = useState("loading");
   const [message, setMessage] = useState("Đang xác thực email...");
 
   useEffect(() => {
     let mounted = true;
+    let redirectTimer;
 
     authService
       .confirmEmailVerification({ token })
-      .then(() => {
+      .then((res) => {
         if (!mounted) return;
+        const verifiedUser = res.data?.user;
+
+        if (isAuthenticated && user?.id && verifiedUser?.id !== user.id) {
+          setStatus("error");
+          setMessage("Link xác thực này không thuộc tài khoản đang đăng nhập.");
+          return;
+        }
+
+        if (isAuthenticated && verifiedUser) {
+          dispatch(setUser(verifiedUser));
+        }
+
         setStatus("success");
         setMessage("Email của bạn đã được xác thực thành công.");
-        setTimeout(() => navigate("/auth/login", { replace: true }), 2200);
+        redirectTimer = setTimeout(() => {
+          const nextRole = verifiedUser?.role || currentRole;
+          navigate(isAuthenticated ? getRoleSettingsPath(nextRole) : "/auth/login", { replace: true });
+        }, 2200);
       })
       .catch((error) => {
         if (!mounted) return;
@@ -28,8 +51,9 @@ const VerifyEmailPage = () => {
 
     return () => {
       mounted = false;
+      clearTimeout(redirectTimer);
     };
-  }, [navigate, token]);
+  }, [currentRole, dispatch, isAuthenticated, navigate, token, user?.id]);
 
   return (
     <div className="verify-email-page">
@@ -44,8 +68,8 @@ const VerifyEmailPage = () => {
           </div>
 
           <div className="text-center">
-            <Link to="/auth/login" className="btn btn-primary">
-              Quay lại đăng nhập
+            <Link to={donePath} className="btn btn-primary">
+              {isAuthenticated ? "Quay lại cài đặt" : "Quay lại đăng nhập"}
             </Link>
           </div>
         </div>

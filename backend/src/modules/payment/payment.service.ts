@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePaymentUrlDto } from './dto/payment.dto';
+import { AppointmentService } from '@modules/appointment/appointment.service';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -9,6 +10,7 @@ export class PaymentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly appointmentService: AppointmentService,
   ) {}
 
   async createPaymentUrl(dto: CreatePaymentUrlDto, ipAddr: string) {
@@ -47,6 +49,11 @@ export class PaymentService {
           data: { status: 'confirmed', paymentStatus: 'pending' },
         }),
       ]);
+
+      await this.appointmentService.sendConfirmationEmailIfConfirmedTransition(
+        appointment.status,
+        appointment.id,
+      );
 
       // Trả về URL điều hướng Frontend về trang báo đặt lịch thành công dạng tiền mặt
       return { payUrl: 'http://localhost:3564/appointments/success-cash' };
@@ -171,6 +178,9 @@ export class PaymentService {
 
     const payment = await this.prisma.payment.findFirst({
       where: { transactionId },
+      include: {
+        appointment: { select: { status: true } },
+      },
     });
 
     if (!payment) return { RspCode: '01', Message: 'Order not found' };
@@ -193,6 +203,10 @@ export class PaymentService {
           },
         }),
       ]);
+      await this.appointmentService.sendConfirmationEmailIfConfirmedTransition(
+        payment.appointment.status,
+        payment.appointmentId,
+      );
       return { RspCode: '00', Message: 'Confirm Success' };
     } else {
       await this.prisma.$transaction([

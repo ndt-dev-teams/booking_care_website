@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AppointmentService } from './appointment.service';
+import { MailModule } from '@modules/mail/mail.module';
 import {
   AppointmentUserController,
   AppointmentUserMeController,
@@ -9,6 +10,7 @@ import {
 } from './appointment.controller';
 
 @Module({
+  imports: [MailModule],
   controllers: [
     AppointmentUserController, // POST /appointments, POST /appointments/:id/cancel
     AppointmentUserMeController, // GET /users/me/appointments, GET /users/me/appointments/:id

@@ -13,6 +13,7 @@ import { GoogleStrategy } from './strategies/google.strategy';
 
 import { JwtAuthGuard } from './guards/auth.guard';
 import { RolesGuard } from './guards/roles.guard';
+import { MailModule } from '@modules/mail/mail.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { RolesGuard } from './guards/roles.guard';
      * nhung van can JwtModule empty o day de co the inject JwtService vao AuthService
      */
     JwtModule.register({}),
+    MailModule,
   ],
   providers: [
     /**

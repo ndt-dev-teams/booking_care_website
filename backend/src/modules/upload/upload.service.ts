@@ -1,12 +1,11 @@
 import {
   BadRequestException,
+  HttpException,
   Injectable,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { randomUUID } from 'crypto';
-import { mkdir, writeFile } from 'fs/promises';
-import { join } from 'path';
-import type { Request } from 'express';
+import { ConfigService } from '@nestjs/config';
+import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
 
 const ALLOWED_TYPES = [
   'specialties',
@@ -30,31 +29,38 @@ export interface UploadedImageFile {
 
 @Injectable()
 export class UploadService {
-  async saveImage(type: string, file: UploadedImageFile, req: Request) {
+  constructor(private readonly configService: ConfigService) {
+    cloudinary.config({
+      cloud_name: this.configService.get<string>('CLOUDINARY_CLOUD_NAME'),
+      api_key: this.configService.get<string>('CLOUDINARY_API_KEY'),
+      api_secret: this.configService.get<string>('CLOUDINARY_API_SECRET'),
+      secure: true,
+    });
+  }
+
+  async saveImage(type: string, file: UploadedImageFile) {
     const uploadType = this.assertUploadType(type);
     this.assertImageFile(file);
 
-    const extension = MIME_EXTENSION_MAP[file.mimetype];
-    const filename = `${randomUUID()}.${extension}`;
-    const relativePath = `/uploads/${uploadType}/${filename}`;
-    const uploadDir = join(process.cwd(), 'uploads', uploadType);
-    const filePath = join(uploadDir, filename);
-
     try {
-      await mkdir(uploadDir, { recursive: true });
-      await writeFile(filePath, file.buffer);
-    } catch (error) {
-      console.error('Lỗi lưu file upload:', error);
-      throw new InternalServerErrorException('Không thể lưu file upload');
-    }
+      const result = await this.uploadToCloudinary(uploadType, file);
+      const filename = result.public_id.split('/').pop() ?? result.public_id;
 
-    return {
-      url: `${this.getPublicBaseUrl(req)}${relativePath}`,
-      path: relativePath,
-      filename,
-      mimeType: file.mimetype,
-      size: file.size,
-    };
+      return {
+        url: result.secure_url,
+        path: result.public_id,
+        filename,
+        mimeType: file.mimetype,
+        size: file.size,
+      };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      console.error('Lỗi upload Cloudinary:', error);
+      throw new InternalServerErrorException('Không thể upload ảnh');
+    }
   }
 
   private assertUploadType(type: string): UploadType {
@@ -79,15 +85,36 @@ export class UploadService {
     }
   }
 
-  private getPublicBaseUrl(req: Request) {
-    const configuredUrl = process.env.PUBLIC_BASE_URL?.trim();
-    if (configuredUrl) return configuredUrl.replace(/\/$/, '');
+  private async uploadToCloudinary(
+    uploadType: UploadType,
+    file: UploadedImageFile,
+  ): Promise<UploadApiResponse> {
+    const cloudName = this.configService.get<string>('CLOUDINARY_CLOUD_NAME');
+    const apiKey = this.configService.get<string>('CLOUDINARY_API_KEY');
+    const apiSecret = this.configService.get<string>('CLOUDINARY_API_SECRET');
+    const rootFolder = this.configService.get<string>(
+      'CLOUDINARY_FOLDER',
+      'bookingcare',
+    );
 
-    const forwardedProto = req.headers['x-forwarded-proto'];
-    const protocol = Array.isArray(forwardedProto)
-      ? forwardedProto[0]
-      : forwardedProto || req.protocol;
+    if (!cloudName || !apiKey || !apiSecret) {
+      throw new InternalServerErrorException('Cloudinary chưa được cấu hình');
+    }
 
-    return `${protocol}://${req.get('host')}`;
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: `${rootFolder}/${uploadType}`,
+          resource_type: 'image',
+        },
+        (error, result) => {
+          if (error) return reject(error);
+          if (!result) return reject(new Error('Cloudinary không trả về kết quả'));
+          resolve(result);
+        },
+      );
+
+      uploadStream.end(file.buffer);
+    });
   }
 }

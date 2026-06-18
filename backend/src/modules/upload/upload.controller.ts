@@ -3,12 +3,10 @@ import {
   Controller,
   Param,
   Post,
-  Req,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import type { Request } from 'express';
 import { Roles } from '@modules/auth/decorators';
 import { UserRole } from '@modules/auth/interfaces';
 import { UploadService, UploadedImageFile } from './upload.service';
@@ -40,9 +38,8 @@ export class UploadController {
   async uploadImage(
     @Param('type') type: string,
     @UploadedFile() file: UploadedImageFile,
-    @Req() req: Request,
   ) {
-    const data = await this.uploadService.saveImage(type, file, req);
+    const data = await this.uploadService.saveImage(type, file);
     return {
       message: 'Upload ảnh thành công',
       data,

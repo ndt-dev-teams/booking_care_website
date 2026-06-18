@@ -3,13 +3,13 @@ import "./AboutPage.scss";
 
 const member = [
   {
-    name: "Huỳnh Hoàng Khoa",
-    id: "N23DCCN166",
+    name: "Phạm Khánh Duy",
+    id: "N23DCCN152",
     role: "FrontEnd Developer",
     img: "https://wewin.com.vn/wp-content/uploads/2022/12/toi-uu-about-us-tren-website-5.jpg",
     description: [
-      "Khoa is our senior developer, bringing extensive experience in building scalable, high-performance applications across a variety of platforms. With a strong foundation in system design and modern development practices, he plays a key role in shaping the technical direction of our projects and ensuring long-term maintainability.",
-      "Beyond his technical expertise, Khoa is also a dedicated mentor who actively supports and guides junior developers. He fosters a collaborative environment where knowledge is shared, code quality is prioritized, and continuous learning is encouraged. Whether he’s reviewing code, solving complex problems, or introducing best practices, Khoa consistently helps elevate both the team’s skills and the overall quality of our products.",
+      "Duy is our senior developer, bringing extensive experience in building scalable, high-performance applications across a variety of platforms. With a strong foundation in system design and modern development practices, he plays a key role in shaping the technical direction of our projects and ensuring long-term maintainability.",
+      "Beyond his technical expertise, Duy is also a dedicated mentor who actively supports and guides junior developers. He fosters a collaborative environment where knowledge is shared, code quality is prioritized, and continuous learning is encouraged. Whether he’s reviewing code, solving complex problems, or introducing best practices, Duy consistently helps elevate both the team’s skills and the overall quality of our products.",
     ],
   },
   {

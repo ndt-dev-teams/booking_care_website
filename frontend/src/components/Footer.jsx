@@ -23,7 +23,7 @@ export default function Footer() {
   ];
 
   const contactList = [
-    { icon: BsTelephone, label: "Đường dây hỗ trợ", text: "196166202", href: "tel:+"},
+    { icon: BsTelephone, label: "Đường dây hỗ trợ", text: "196152202", href: "tel:+"},
     { icon: BsEnvelope, label: "Email", text: "support@tktbookingcare.vn", href: "mailto:" },
     { icon: BsGeoAlt, label: "Trụ sở HCM", text: "97 Man Thiện, phường Tăng Nhơn Phú, TP.HCM", href: "https://maps.app.goo.gl/ey7YXiGa1VYMNgBx6"},
   ];

@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: bookingcare-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-tkt_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change-me}
+      POSTGRES_DB: ${DB_NAME:-bookingcare-website}
+    ports:
+      - '${DB_PORT:-5434}:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bookingcare-backend
+    restart: unless-stopped
+    ports:
+      - '${PORT:-8080}:8080'
+    environment:
+      - NODE_ENV=development
+      - PORT=8080
+      - DATABASE_URL=postgresql://${DB_USER:-tkt_user}:${DB_PASSWORD:-change-me}@db:5432/${DB_NAME:-bookingcare-website}?schema=public
+      - FRONTEND_URL=http://localhost:${FRONTEND_PORT:-3564}
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:-secret}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-secret}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL}
+      - MAIL_PROVIDER=${MAIL_PROVIDER:-resend}
+      - MAIL_APP_NAME=${MAIL_APP_NAME:-TKTBookingCare}
+      - MAIL_FROM=${MAIL_FROM}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+      - CLOUDINARY_FOLDER=${CLOUDINARY_FOLDER}
+      - VNPAY_TMN_CODE=${VNPAY_TMN_CODE}
+      - VNPAY_HASH_SECRET=${VNPAY_HASH_SECRET}
+      - VNPAY_URL=${VNPAY_URL}
+      - VNPAY_RETURN_URL=${VNPAY_RETURN_URL}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL}
+    env_file:
+      - .env
+    depends_on:
+      - db
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=http://localhost:${PORT:-8080}/api/v1
+    container_name: bookingcare-frontend
+    restart: unless-stopped
+    ports:
+      - '${FRONTEND_PORT:-3564}:80'
+    depends_on:
+      - backend
+
+volumes:
+  postgres-data:

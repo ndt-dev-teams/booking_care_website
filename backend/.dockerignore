@@ -1,0 +1,14 @@
+node_modules
+dist
+coverage
+.nest
+.nyc_output
+.env
+.env.*
+!.env.example
+*.log
+docker-compose*.yml
+docker-compose*.yaml
+.git
+.gitignore
+README.md

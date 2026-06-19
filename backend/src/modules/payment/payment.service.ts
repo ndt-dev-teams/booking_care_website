@@ -56,7 +56,8 @@ export class PaymentService {
       );
 
       // Trả về URL điều hướng Frontend về trang báo đặt lịch thành công dạng tiền mặt
-      return { payUrl: 'http://localhost:3564/appointments/success-cash' };
+      const frontendUrl = this.configService.getOrThrow<string>('FRONTEND_URL');
+      return { payUrl: `${frontendUrl}/appointments/success-cash` };
     }
 
     // ─── XỬ LÝ PHƯƠNG THỨC THANH TOÁN ONLINE VNPAY ───
